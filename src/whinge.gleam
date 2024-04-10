@@ -9,10 +9,11 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 
+import filepath
 import glance
 import simplifile
 
-pub type WhingeError {
+type WhingeError {
   CouldNotGetCurrentDirectory
   CouldNotGetSourceFiles
   CouldNotReadAllSourceFiles
@@ -26,6 +27,10 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
     CouldNotReadAllSourceFiles -> "Error: Could not read all source files"
     CouldNotParseAllModules -> "Error: Could not parse all modules"
   }
+}
+
+type Lint {
+  PanicFoundInFunction(module: String, function_name: String)
 }
 
 pub fn main() {
@@ -57,30 +62,66 @@ fn run() -> Result(Nil, WhingeError) {
     |> list.filter(fn(x) { !string.contains(x, "whinge.gleam") })
 
   // Read the contents of each source file
-  use src_code <- result.try(
-    list.try_map(src_files, simplifile.read)
+  use src <- result.try(
+    list.map(src_files, fn(file) {
+      let name =
+        filepath.base_name(file)
+        |> string.drop_right(6)
+      #(name, file)
+    })
+    |> list.try_map(fn(x) {
+      let #(name, file) = x
+      use code <- result.try(simplifile.read(file))
+      Ok(#(name, code))
+    })
     |> result.replace_error(CouldNotReadAllSourceFiles),
   )
   // Parse the contents of each source file as a glance module
   use modules <- result.try(
-    list.try_map(src_code, glance.module)
+    list.try_map(src, fn(x) {
+      let #(name, src_code) = x
+      use module <- result.try(glance.module(src_code))
+      Ok(#(name, module))
+    })
     |> result.replace_error(CouldNotParseAllModules),
   )
   // Iterate over the modules and run each lint
-  list.flat_map(modules, contains_panics)
+  list.flat_map(modules, fn(module) {
+    let #(name, module) = module
+    let lints = contains_panics(module)
+    list.map(lints, fn(lint) { lint(name) })
+  })
   |> io.debug
 
   Ok(Nil)
 }
 
-fn contains_panics(input_module: glance.Module) -> List(String) {
-  visit_expressions(input_module, fn(exp) {
-    case exp {
-      glance.Panic(_) -> Some("Panic found")
-      _ -> None
+fn contains_panics(input_module: glance.Module) -> List(fn(String) -> Lint) {
+  // Panics are "expressions", so they'll only be found in functions
+  // and in constants. We want to visit and produce errors for these
+  // individually because the functions will have location information
+  // we want to include in errors
+
+  let function_panics = {
+    use func <- list.flat_map(extract_functions(input_module))
+    use stmt <- list.flat_map(func.body)
+
+    let expr = case stmt {
+      glance.Use(_, expr) -> expr
+      glance.Assignment(value: val, ..) -> val
+      glance.Expression(expr) -> expr
     }
-  })
-  |> option.values
+
+    do_visit_expressions(expr, [], fn(exp) {
+      case exp {
+        glance.Panic(_) -> {
+          Some(PanicFoundInFunction(_, func.name))
+        }
+        _ -> None
+      }
+    })
+    |> option.values
+  }
 }
 
 // Extracts all the top level functions out of a glance module.
