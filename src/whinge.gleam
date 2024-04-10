@@ -137,30 +137,31 @@ fn do_visit_expressions(
     | glance.String(_)
     | glance.Variable(_) -> Nil
 
-    glance.NegateInt(expr) | glance.NegateBool(expr) -> f(expr)
+    glance.NegateInt(expr) | glance.NegateBool(expr) ->
+      do_visit_expressions(expr, f)
 
     glance.Block(stmts) -> {
       use stmt <- list.each(stmts)
       case stmt {
         // In a use statement, the "expression" should be
-        glance.Use(_, expr) -> f(expr)
-        glance.Assignment(value: val, ..) -> f(val)
-        glance.Expression(expr) -> f(expr)
+        glance.Use(_, expr) -> do_visit_expressions(expr, f)
+        glance.Assignment(value: expr, ..) -> do_visit_expressions(expr, f)
+        glance.Expression(expr) -> do_visit_expressions(expr, f)
       }
     }
-    glance.Tuple(exprs) -> list.each(exprs, f)
+    glance.Tuple(exprs) -> list.each(exprs, do_visit_expressions(_, f))
     glance.List(elements, rest) -> {
-      list.each(elements, f)
-      option.map(rest, f)
+      list.each(elements, do_visit_expressions(_, f))
+      option.map(rest, do_visit_expressions(_, f))
       Nil
     }
     glance.Fn(arguments: _, return_annotation: _, body: body) -> {
       use stmt <- list.each(body)
       case stmt {
         // In a use statement, the "expression" should be
-        glance.Use(_, expr) -> f(expr)
-        glance.Assignment(value: val, ..) -> f(val)
-        glance.Expression(expr) -> f(expr)
+        glance.Use(_, expr) -> do_visit_expressions(expr, f)
+        glance.Assignment(value: expr, ..) -> do_visit_expressions(expr, f)
+        glance.Expression(expr) -> do_visit_expressions(expr, f)
       }
     }
     glance.RecordUpdate(
@@ -169,17 +170,18 @@ fn do_visit_expressions(
         record: record,
         fields: fields,
       ) -> {
-      f(record)
+      do_visit_expressions(record, f)
       use #(_, expr) <- list.each(fields)
-      f(expr)
+      do_visit_expressions(expr, f)
     }
-    glance.FieldAccess(container: container, label: _) -> f(container)
+    glance.FieldAccess(container: container, label: _) ->
+      do_visit_expressions(container, f)
     glance.Call(function, arguments) -> {
-      f(function)
-      list.each(arguments, fn(arg) { f(arg.item) })
+      do_visit_expressions(function, f)
+      list.each(arguments, fn(arg) { do_visit_expressions(arg.item, f) })
     }
     glance.TupleIndex(tuple, index: _) -> {
-      f(tuple)
+      do_visit_expressions(tuple, f)
     }
     glance.FnCapture(
         label: _,
@@ -187,25 +189,25 @@ fn do_visit_expressions(
         arguments_before: arguments_before,
         arguments_after: arguments_after,
       ) -> {
-      f(function)
-      list.each(arguments_before, fn(arg) { f(arg.item) })
-      list.each(arguments_after, fn(arg) { f(arg.item) })
+      do_visit_expressions(function, f)
+      list.each(arguments_before, fn(arg) { do_visit_expressions(arg.item, f) })
+      list.each(arguments_after, fn(arg) { do_visit_expressions(arg.item, f) })
     }
     glance.BitString(segments) -> {
       use #(expr, _) <- list.each(segments)
-      f(expr)
+      do_visit_expressions(expr, f)
     }
     glance.Case(subjects, clauses) -> {
-      list.each(subjects, f)
+      list.each(subjects, do_visit_expressions(_, f))
       list.each(clauses, fn(c) {
         let glance.Clause(_, guard, body) = c
-        option.map(guard, f)
-        f(body)
+        option.map(guard, do_visit_expressions(_, f))
+        do_visit_expressions(body, f)
       })
     }
     glance.BinaryOperator(name: _, left: left, right: right) -> {
-      f(left)
-      f(right)
+      do_visit_expressions(left, f)
+      do_visit_expressions(right, f)
     }
   }
 }
