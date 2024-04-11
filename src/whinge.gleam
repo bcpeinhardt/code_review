@@ -36,7 +36,13 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
 
 // Represents each rule we lint for.
 type Lint {
-  Lint(module: String, function_name: String, rule: String, error: String)
+  Lint(
+    module: String,
+    function_name: String,
+    rule: String,
+    error: String,
+    details: List(String),
+  )
 }
 
 // Represents information the linter has access to. We want this to include
@@ -152,6 +158,10 @@ fn single_module_contains_panic(
             function_name: func.name,
             rule: "PanicFoundInFunction",
             error: "Found `panic`",
+            details: [
+              "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
+              "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
+            ],
           ))
         }
         _ -> None
@@ -173,6 +183,9 @@ fn single_module_contains_panic(
             function_name: const_.name,
             rule: "PanicFoundInConstant",
             error: "Found `panic`",
+            details: [
+              "Using `panic` in a constant will prevent the application from running. It is only useful in functions, and even then, it should rarely be used.",
+            ],
           ))
         }
         _ -> None
@@ -214,6 +227,10 @@ fn concat_string_literals(
             function_name: func.name,
             rule: "UnnecessaryStringConcatenation",
             error: "Unnecessary concatenation of string literals",
+            details: [
+              "Instead of concatenating these two string literals, they can be written as a single one.",
+              "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
+            ],
           ))
         }
         _ -> None
