@@ -175,26 +175,33 @@ fn single_module_contains_panic(
   // it for now
   let constant_panics = {
     use const_ <- list.flat_map(extract_constants(input_module))
-    do_visit_expressions(const_.value, [], fn(expr) {
-      case expr {
-        glance.Panic(_) -> {
-          Some(RuleError(
-            module: _,
-            function_name: const_.name,
-            rule: "PanicFoundInConstant",
-            error: "Found `panic`",
-            details: [
-              "Using `panic` in a constant will prevent the application from running. It is only useful in functions, and even then, it should rarely be used.",
-            ],
-          ))
-        }
-        _ -> None
-      }
+    do_visit_expressions(const_.value, [], fn(exp) {
+      contains_panic_in_constant_expression_visitor(const_.name, exp)
     })
     |> option.values
   }
 
   list.append(constant_panics, function_panics)
+}
+
+fn contains_panic_in_constant_expression_visitor(
+  function_name: String,
+  expr: glance.Expression,
+) {
+  case expr {
+    glance.Panic(_) -> {
+      Some(RuleError(
+        module: _,
+        function_name: function_name,
+        rule: "PanicFoundInConstant",
+        error: "Found `panic`",
+        details: [
+          "Using `panic` in a constant will prevent the application from running. It is only useful in functions, and even then, it should rarely be used.",
+        ],
+      ))
+    }
+    _ -> None
+  }
 }
 
 fn concat_string_literals(
