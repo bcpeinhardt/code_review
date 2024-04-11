@@ -37,7 +37,7 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
 // Represents an error reported by a rule.
 type RuleError {
   RuleError(
-    module: String,
+    path: String,
     function_name: String,
     rule: String,
     error: String,
@@ -72,7 +72,7 @@ type Rule {
   Rule(
     name: String,
     expression_visitor: option.Option(
-      fn(String, glance.Expression) -> option.Option(fn(String) -> RuleError),
+      fn(String, String, glance.Expression) -> option.Option(RuleError),
     ),
   )
 }
@@ -159,15 +159,15 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
 
 fn contains_panics(kb: KnowledgeBase) -> List(RuleError) {
   use acc, Module(path, module) <- list.fold(kb.src_modules, [])
-  single_module_contains_panic(module)
-  |> list.append(concat_string_literals(module))
-  |> list.map(fn(f) { f(path) })
+  single_module_contains_panic(path, module)
+  |> list.append(concat_string_literals(path, module))
   |> list.append(acc)
 }
 
 fn single_module_contains_panic(
+  path: String,
   input_module: glance.Module,
-) -> List(fn(String) -> RuleError) {
+) -> List(RuleError) {
   // Panics are "expressions", so they'll only be found in functions
   // and in constants.
 
@@ -182,7 +182,7 @@ fn single_module_contains_panic(
     }
 
     do_visit_expressions(expr, [], fn(exp) {
-      contains_panic_in_function_expression_visitor(func.name, exp)
+      contains_panic_in_function_expression_visitor(path, func.name, exp)
     })
     |> option.values
   }
@@ -193,7 +193,7 @@ fn single_module_contains_panic(
   let constant_panics = {
     use const_ <- list.flat_map(extract_constants(input_module))
     do_visit_expressions(const_.value, [], fn(exp) {
-      contains_panic_in_constant_expression_visitor(const_.name, exp)
+      contains_panic_in_constant_expression_visitor(path, const_.name, exp)
     })
     |> option.values
   }
@@ -202,49 +202,56 @@ fn single_module_contains_panic(
 }
 
 fn contains_panic_in_function_expression_visitor(
+  path: String,
   function_name: String,
   expr: glance.Expression,
-) -> option.Option(fn(String) -> RuleError) {
+) -> option.Option(RuleError) {
   case expr {
     glance.Panic(_) -> {
-      Some(RuleError(
-        module: _,
-        function_name: function_name,
-        rule: "PanicFoundInFunction",
-        error: "Found `panic`",
-        details: [
-          "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
-          "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
-        ],
-      ))
+      Some(
+        RuleError(
+          path: path,
+          function_name: function_name,
+          rule: "PanicFoundInFunction",
+          error: "Found `panic`",
+          details: [
+            "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
+            "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
+          ],
+        ),
+      )
     }
     _ -> None
   }
 }
 
 fn contains_panic_in_constant_expression_visitor(
+  path: String,
   function_name: String,
   expr: glance.Expression,
-) -> option.Option(fn(String) -> RuleError) {
+) -> option.Option(RuleError) {
   case expr {
     glance.Panic(_) -> {
-      Some(RuleError(
-        module: _,
-        function_name: function_name,
-        rule: "PanicFoundInConstant",
-        error: "Found `panic`",
-        details: [
-          "Using `panic` in a constant will prevent the application from running. It is only useful in functions, and even then, it should rarely be used.",
-        ],
-      ))
+      Some(
+        RuleError(
+          path: path,
+          function_name: function_name,
+          rule: "PanicFoundInConstant",
+          error: "Found `panic`",
+          details: [
+            "Using `panic` in a constant will prevent the application from running. It is only useful in functions, and even then, it should rarely be used.",
+          ],
+        ),
+      )
     }
     _ -> None
   }
 }
 
 fn concat_string_literals(
+  path: String,
   input_module: glance.Module,
-) -> List(fn(String) -> RuleError) {
+) -> List(RuleError) {
   // Panics are "expressions", so they'll only be found in functions
   // and in constants. We want to visit and produce errors for these
   // individually because the functions will have location information
@@ -261,46 +268,51 @@ fn concat_string_literals(
     }
 
     do_visit_expressions(expr, [], fn(expr_) {
-      unnecessary_concatenation_expression_visitor(func.name, expr_)
+      unnecessary_concatenation_expression_visitor(path, func.name, expr_)
     })
     |> option.values
   }
 }
 
 fn unnecessary_concatenation_expression_visitor(
+  path: String,
   function_name: String,
   expr: glance.Expression,
-) -> option.Option(fn(String) -> RuleError) {
+) -> option.Option(RuleError) {
   let rule_name = "UnnecessaryStringConcatenation"
   case expr {
     glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
     | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
-      Some(RuleError(
-        module: _,
-        function_name: function_name,
-        rule: rule_name,
-        error: "Unnecessary concatenation with an empty string",
-        details: [
-          "The result of adding an empty string to an expression is the expression itself.",
-          "You can remove the concatenation with \"\".",
-        ],
-      ))
+      Some(
+        RuleError(
+          path: path,
+          function_name: function_name,
+          rule: rule_name,
+          error: "Unnecessary concatenation with an empty string",
+          details: [
+            "The result of adding an empty string to an expression is the expression itself.",
+            "You can remove the concatenation with \"\".",
+          ],
+        ),
+      )
     }
     glance.BinaryOperator(
       glance.Concatenate,
       glance.String(_),
       glance.String(_),
     ) -> {
-      Some(RuleError(
-        module: _,
-        function_name: function_name,
-        rule: rule_name,
-        error: "Unnecessary concatenation of string literals",
-        details: [
-          "Instead of concatenating these two string literals, they can be written as a single one.",
-          "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
-        ],
-      ))
+      Some(
+        RuleError(
+          path: path,
+          function_name: function_name,
+          rule: rule_name,
+          error: "Unnecessary concatenation of string literals",
+          details: [
+            "Instead of concatenating these two string literals, they can be written as a single one.",
+            "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
+          ],
+        ),
+      )
     }
     _ -> None
   }
