@@ -115,7 +115,7 @@ fn run() -> Result(Nil, WhingeError) {
     |> result.replace_error(CouldNotGetCurrentDirectory),
   )
   use knowledge_base <- result.try(read_project(curr_dir))
-  let errors = contains_panics(knowledge_base)
+  let errors = visit_knowledge_base(knowledge_base, config)
   io.debug(errors)
   Ok(Nil)
 }
@@ -157,48 +157,36 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
   Ok(KnowledgeBase(src_modules: modules, gloml: gloml))
 }
 
-fn contains_panics(kb: KnowledgeBase) -> List(RuleError) {
+fn visit_knowledge_base(kb: KnowledgeBase, rules: List(Rule)) -> List(RuleError) {
   use acc, Module(path, module) <- list.fold(kb.src_modules, [])
-  single_module_contains_panic(path, module)
-  |> list.append(concat_string_literals(path, module))
+  visit_module(path, rules, module)
   |> list.append(acc)
 }
 
-fn single_module_contains_panic(
+fn visit_module(
   path: String,
+  rules: List(Rule),
   input_module: glance.Module,
 ) -> List(RuleError) {
-  // Panics are "expressions", so they'll only be found in functions
-  // and in constants.
+  use func <- list.flat_map(extract_functions(input_module))
+  use stmt <- list.flat_map(func.body)
 
-  let function_panics = {
-    use func <- list.flat_map(extract_functions(input_module))
-    use stmt <- list.flat_map(func.body)
-
-    let expr = case stmt {
-      glance.Use(_, expr) -> expr
-      glance.Assignment(value: val, ..) -> val
-      glance.Expression(expr) -> expr
-    }
-
-    do_visit_expressions(expr, [], fn(exp) {
-      contains_panic_in_function_expression_visitor(path, func.name, exp)
-    })
-    |> option.values
+  let expr = case stmt {
+    glance.Use(_, expr) -> expr
+    glance.Assignment(value: val, ..) -> val
+    glance.Expression(expr) -> expr
   }
 
-  // I don't think this is actually possible in Gleam, but it's
-  // possible within the logical structure of Glance so I'll keep
-  // it for now
-  let constant_panics = {
-    use const_ <- list.flat_map(extract_constants(input_module))
-    do_visit_expressions(const_.value, [], fn(exp) {
-      contains_panic_in_constant_expression_visitor(path, const_.name, exp)
+  do_visit_expressions(expr, [], fn(exp) {
+    list.map(rules, fn(rule) {
+      case rule.expression_visitor {
+        Some(visitor) -> visitor(path, func.name, exp)
+        None -> None
+      }
     })
-    |> option.values
-  }
-
-  list.append(constant_panics, function_panics)
+  })
+  |> list.flatten
+  |> option.values
 }
 
 fn contains_panic_in_function_expression_visitor(
@@ -245,32 +233,6 @@ fn contains_panic_in_constant_expression_visitor(
       )
     }
     _ -> None
-  }
-}
-
-fn concat_string_literals(
-  path: String,
-  input_module: glance.Module,
-) -> List(RuleError) {
-  // Panics are "expressions", so they'll only be found in functions
-  // and in constants. We want to visit and produce errors for these
-  // individually because the functions will have location information
-  // we want to include in errors
-
-  let rule = {
-    use func <- list.flat_map(extract_functions(input_module))
-    use stmt <- list.flat_map(func.body)
-
-    let expr = case stmt {
-      glance.Use(_, expr) -> expr
-      glance.Assignment(value: val, ..) -> val
-      glance.Expression(expr) -> expr
-    }
-
-    do_visit_expressions(expr, [], fn(expr_) {
-      unnecessary_concatenation_expression_visitor(path, func.name, expr_)
-    })
-    |> option.values
   }
 }
 
