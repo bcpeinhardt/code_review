@@ -13,6 +13,8 @@ import gleam/result
 import gleam/string
 import simplifile
 import tom
+import review_config.{config}
+import rule.{type Rule, type RuleError, Rule, RuleError}
 
 pub type WhingeError {
   CouldNotGetCurrentDirectory
@@ -32,17 +34,6 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
     CouldNotReadGleamToml -> "Error: Could not read gleam.toml"
     CouldNotParseGleamToml -> "Error: Could not parse gleam.toml"
   }
-}
-
-// Represents an error reported by a rule.
-pub type RuleError {
-  RuleError(
-    path: String,
-    location_identifier: String,
-    rule: String,
-    message: String,
-    details: List(String),
-  )
 }
 
 // Responsible for printing a rule error to the console
@@ -84,25 +75,6 @@ type Module {
     src: glance.Module,
   )
 }
-
-type Rule {
-  Rule(
-    name: String,
-    expression_visitor: option.Option(fn(glance.Expression) -> List(RuleError)),
-  )
-}
-
-const no_panic_rule: Rule = Rule(
-  name: "NoPanic",
-  expression_visitor: Some(contains_panic_in_function_expression_visitor),
-)
-
-const no_unnecessary_concatenation_rule: Rule = Rule(
-  name: "NoUnnecessaryStringConcatenation",
-  expression_visitor: Some(unnecessary_concatenation_expression_visitor),
-)
-
-const config: List(Rule) = [no_panic_rule, no_unnecessary_concatenation_rule]
 
 pub fn main() -> Result(Nil, WhingeError) {
   // Get the current directory
@@ -198,54 +170,6 @@ fn visit_module(
     })
   })
   |> list.flatten
-}
-
-fn contains_panic_in_function_expression_visitor(
-  expr: glance.Expression,
-) -> List(RuleError) {
-  case expr {
-    glance.Panic(_) -> {
-      [
-        error(message: "Found `panic`", details: [
-          "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
-          "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
-        ]),
-      ]
-    }
-    _ -> []
-  }
-}
-
-fn unnecessary_concatenation_expression_visitor(
-  expr: glance.Expression,
-) -> List(RuleError) {
-  case expr {
-    glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
-    | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
-      [
-        error(
-          message: "Unnecessary concatenation with an empty string",
-          details: [
-            "The result of adding an empty string to an expression is the expression itself.",
-            "You can remove the concatenation with \"\".",
-          ],
-        ),
-      ]
-    }
-    glance.BinaryOperator(
-      glance.Concatenate,
-      glance.String(_),
-      glance.String(_),
-    ) -> {
-      [
-        error(message: "Unnecessary concatenation of string literals", details: [
-          "Instead of concatenating these two string literals, they can be written as a single one.",
-          "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
-        ]),
-      ]
-    }
-    _ -> []
-  }
 }
 
 // Extracts all the top level functions out of a glance module.
@@ -405,14 +329,4 @@ fn do_visit_expressions(
       |> do_visit_expressions(right, _, f)
     }
   }
-}
-
-fn error(message message: String, details details: List(String)) -> RuleError {
-  RuleError(
-    path: "",
-    location_identifier: "",
-    rule: "",
-    message: message,
-    details: details,
-  )
 }
