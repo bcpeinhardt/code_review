@@ -57,7 +57,7 @@ pub fn display_rule_error(input: RuleError) -> String {
   <> "\nRule: "
   <> input.rule
   <> "\nError: "
-  <> input.error
+  <> input.message
   <> "\nDetails: "
   <> string.join(input.details, with: "\n")
 }
