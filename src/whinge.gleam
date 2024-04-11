@@ -303,29 +303,37 @@ fn do_visit_expressions(
       do_visit_expressions(expr, acc, f)
 
     glance.Block(stmts) -> {
-      use stmt <- list.flat_map(stmts)
+      use sub_acc, stmt <- list.fold(stmts, acc)
       case stmt {
         // In a use statement, the "expression" should be
-        glance.Use(_, expr) -> do_visit_expressions(expr, acc, f)
-        glance.Assignment(value: expr, ..) -> do_visit_expressions(expr, acc, f)
-        glance.Expression(expr) -> do_visit_expressions(expr, acc, f)
+        glance.Use(_, expr) -> do_visit_expressions(expr, sub_acc, f)
+        glance.Assignment(value: expr, ..) ->
+          do_visit_expressions(expr, sub_acc, f)
+        glance.Expression(expr) -> do_visit_expressions(expr, sub_acc, f)
       }
     }
-    glance.Tuple(exprs) -> list.flat_map(exprs, do_visit_expressions(_, acc, f))
+    glance.Tuple(exprs) ->
+      list.fold(exprs, acc, fn(sub_acc, expr) {
+        do_visit_expressions(expr, sub_acc, f)
+      })
     glance.List(elements, rest) -> {
-      let elms = list.flat_map(elements, do_visit_expressions(_, acc, f))
+      let new_acc =
+        list.fold(elements, acc, fn(sub_acc, expr) {
+          do_visit_expressions(expr, sub_acc, f)
+        })
       case rest {
-        Some(expr) -> list.append(elms, do_visit_expressions(expr, acc, f))
-        None -> elms
+        Some(expr) -> do_visit_expressions(expr, new_acc, f)
+        None -> new_acc
       }
     }
     glance.Fn(arguments: _, return_annotation: _, body: body) -> {
-      use stmt <- list.flat_map(body)
+      use sub_acc, stmt <- list.fold(body, acc)
       case stmt {
         // In a use statement, the "expression" should be
-        glance.Use(_, expr) -> do_visit_expressions(expr, acc, f)
-        glance.Assignment(value: expr, ..) -> do_visit_expressions(expr, acc, f)
-        glance.Expression(expr) -> do_visit_expressions(expr, acc, f)
+        glance.Use(_, expr) -> do_visit_expressions(expr, sub_acc, f)
+        glance.Assignment(value: expr, ..) ->
+          do_visit_expressions(expr, sub_acc, f)
+        glance.Expression(expr) -> do_visit_expressions(expr, sub_acc, f)
       }
     }
     glance.RecordUpdate(
@@ -335,18 +343,18 @@ fn do_visit_expressions(
       fields: fields,
     ) -> {
       {
-        use #(_, expr) <- list.flat_map(fields)
-        do_visit_expressions(expr, acc, f)
+        use sub_acc, #(_, expr) <- list.fold(fields, acc)
+        do_visit_expressions(expr, sub_acc, f)
       }
-      |> list.append(do_visit_expressions(record, acc, f))
+      |> do_visit_expressions(record, _, f)
     }
     glance.FieldAccess(container: container, label: _) ->
       do_visit_expressions(container, acc, f)
     glance.Call(function, arguments) -> {
-      list.flat_map(arguments, fn(arg) {
-        do_visit_expressions(arg.item, acc, f)
+      list.fold(arguments, acc, fn(sub_acc, arg) {
+        do_visit_expressions(arg.item, sub_acc, f)
       })
-      |> list.append(do_visit_expressions(function, acc, f))
+      |> do_visit_expressions(function, _, f)
     }
     glance.TupleIndex(tuple, index: _) -> {
       do_visit_expressions(tuple, acc, f)
@@ -357,36 +365,34 @@ fn do_visit_expressions(
       arguments_before: arguments_before,
       arguments_after: arguments_after,
     ) -> {
-      list.flat_map(arguments_before, fn(arg) {
-        do_visit_expressions(arg.item, acc, f)
-      })
-      |> list.append(
-        list.flat_map(arguments_after, fn(arg) {
-          do_visit_expressions(arg.item, acc, f)
-        }),
+      list.fold(
+        list.append(arguments_before, arguments_after),
+        acc,
+        fn(sub_acc, arg) { do_visit_expressions(arg.item, sub_acc, f) },
       )
-      |> list.append(do_visit_expressions(function, acc, f))
+      |> do_visit_expressions(function, _, f)
     }
     glance.BitString(segments) -> {
-      use #(expr, _) <- list.flat_map(segments)
-      do_visit_expressions(expr, acc, f)
+      use sub_acc, #(expr, _) <- list.fold(segments, acc)
+      do_visit_expressions(expr, sub_acc, f)
     }
     glance.Case(subjects, clauses) -> {
-      list.flat_map(subjects, do_visit_expressions(_, acc, f))
-      |> list.append(
-        list.flat_map(clauses, fn(c) {
-          let glance.Clause(_, guard, body) = c
-          let body = do_visit_expressions(body, acc, f)
-          case guard {
-            Some(expr) -> list.append(body, do_visit_expressions(expr, acc, f))
-            None -> body
-          }
-        }),
-      )
+      let new_acc =
+        list.fold(subjects, acc, fn(sub_acc, expr) {
+          do_visit_expressions(expr, sub_acc, f)
+        })
+      list.fold(clauses, new_acc, fn(sub_acc, c) {
+        let glance.Clause(_, guard, body) = c
+        let sub_acc_2 = do_visit_expressions(body, sub_acc, f)
+        case guard {
+          Some(expr) -> do_visit_expressions(expr, sub_acc_2, f)
+          None -> sub_acc_2
+        }
+      })
     }
     glance.BinaryOperator(name: _, left: left, right: right) -> {
       do_visit_expressions(left, acc, f)
-      |> list.append(do_visit_expressions(right, acc, f))
+      |> do_visit_expressions(right, _, f)
     }
   }
 }
