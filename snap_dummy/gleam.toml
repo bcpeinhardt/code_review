@@ -1,4 +1,4 @@
-name = "whinge"
+name = "snap_dummy"
 version = "1.0.0"
 
 # Fill out these fields if you intend to generate HTML documentation or publish
@@ -14,12 +14,6 @@ version = "1.0.0"
 
 [dependencies]
 gleam_stdlib = ">= 0.34.0 and < 2.0.0"
-glance = ">= 0.8.2 and < 1.0.0"
-glance_printer = ">= 1.1.0 and < 2.0.0"
-simplifile = ">= 1.7.0 and < 2.0.0"
-filepath = ">= 1.0.0 and < 2.0.0"
-tom = ">= 0.3.0 and < 1.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
-birdie = ">= 1.1.2 and < 2.0.0"

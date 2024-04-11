@@ -1,0 +1,11 @@
+---
+version: 1.1.2
+title: ./snap_dummy/src/string_concatenation.gleam
+---
+Path: ./snap_dummy/src/string_concatenation.gleam
+
+Location Identifier: string_concatenation
+Rule: NoUnnecessaryStringConcatenation
+Error: Unnecessary concatenation of string literals
+Details: Instead of concatenating these two string literals, they can be written as a single one.
+For instance, instead of "a" <> "b", you could write that as "ab".
