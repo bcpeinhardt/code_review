@@ -77,14 +77,9 @@ type Rule {
   )
 }
 
-const function_panic_rule: Rule = Rule(
-  name: "PanicFoundInFunction",
+const no_panic_rule: Rule = Rule(
+  name: "NoPanic",
   expression_visitor: Some(contains_panic_in_function_expression_visitor),
-)
-
-const constant_panic_rule: Rule = Rule(
-  name: "PanicFoundInConstant",
-  expression_visitor: Some(contains_panic_in_constant_expression_visitor),
 )
 
 const unnecessary_concatenation_rule: Rule = Rule(
@@ -92,11 +87,7 @@ const unnecessary_concatenation_rule: Rule = Rule(
   expression_visitor: Some(unnecessary_concatenation_expression_visitor),
 )
 
-const config: List(Rule) = [
-  function_panic_rule,
-  constant_panic_rule,
-  unnecessary_concatenation_rule,
-]
+const config: List(Rule) = [no_panic_rule, unnecessary_concatenation_rule]
 
 pub fn main() {
   case run() {
@@ -190,34 +181,11 @@ fn contains_panic_in_function_expression_visitor(
         RuleError(
           path: path,
           function_name: function_name,
-          rule: "PanicFoundInFunction",
+          rule: "NoPanic",
           error: "Found `panic`",
           details: [
             "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
             "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
-          ],
-        ),
-      ]
-    }
-    _ -> []
-  }
-}
-
-fn contains_panic_in_constant_expression_visitor(
-  path: String,
-  function_name: String,
-  expr: glance.Expression,
-) -> List(RuleError) {
-  case expr {
-    glance.Panic(_) -> {
-      [
-        RuleError(
-          path: path,
-          function_name: function_name,
-          rule: "PanicFoundInConstant",
-          error: "Found `panic`",
-          details: [
-            "Using `panic` in a constant will prevent the application from running. It is only useful in functions, and even then, it should rarely be used.",
           ],
         ),
       ]
