@@ -173,7 +173,7 @@ fn single_module_contains_panic(
 fn contains_panic_in_function_expression_visitor(
   function_name: String,
   expr: glance.Expression,
-) {
+) -> option.Option(fn(String) -> RuleError) {
   case expr {
     glance.Panic(_) -> {
       Some(RuleError(
@@ -194,7 +194,7 @@ fn contains_panic_in_function_expression_visitor(
 fn contains_panic_in_constant_expression_visitor(
   function_name: String,
   expr: glance.Expression,
-) {
+) -> option.Option(fn(String) -> RuleError) {
   case expr {
     glance.Panic(_) -> {
       Some(RuleError(
@@ -239,7 +239,7 @@ fn concat_string_literals(
 fn unnecessary_concatenation_expression_visitor(
   function_name: String,
   expr: glance.Expression,
-) {
+) -> option.Option(fn(String) -> RuleError) {
   let rule_name = "UnnecessaryStringConcatenation"
   case expr {
     glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
