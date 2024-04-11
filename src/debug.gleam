@@ -25,3 +25,8 @@ pub fn string_concatenation() {
 pub fn no_string_concatenation_to_report(var: String) {
   "a" <> var
 }
+
+pub fn concat_empty() {
+  "a" <> ""
+  "" <> "b"
+}
