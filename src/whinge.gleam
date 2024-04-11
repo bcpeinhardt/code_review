@@ -176,12 +176,33 @@ fn single_module_contains_panic(
   let constant_panics = {
     use const_ <- list.flat_map(extract_constants(input_module))
     do_visit_expressions(const_.value, [], fn(exp) {
-      contains_panic_in_constant_expression_visitor(const_.name, exp)
+      contains_panic_in_function_expression_visitor(const_.name, exp)
     })
     |> option.values
   }
 
   list.append(constant_panics, function_panics)
+}
+
+fn contains_panic_in_function_expression_visitor(
+  function_name: String,
+  expr: glance.Expression,
+) {
+  case expr {
+    glance.Panic(_) -> {
+      Some(RuleError(
+        module: _,
+        function_name: function_name,
+        rule: "PanicFoundInFunction",
+        error: "Found `panic`",
+        details: [
+          "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
+          "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
+        ],
+      ))
+    }
+    _ -> None
+  }
 }
 
 fn contains_panic_in_constant_expression_visitor(
