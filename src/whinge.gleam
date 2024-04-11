@@ -37,8 +37,8 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
 // Represents an error reported by a rule.
 type RuleError {
   RuleError(
-    module: String,
-    function_name: String,
+    path: String,
+    location_identifier: String,
     rule: String,
     error: String,
     details: List(String),
@@ -68,6 +68,27 @@ type Module {
   )
 }
 
+type Rule {
+  Rule(
+    name: String,
+    expression_visitor: option.Option(
+      fn(String, String, glance.Expression) -> List(RuleError),
+    ),
+  )
+}
+
+const no_panic_rule: Rule = Rule(
+  name: "NoPanic",
+  expression_visitor: Some(contains_panic_in_function_expression_visitor),
+)
+
+const no_unnecessary_concatenation_rule: Rule = Rule(
+  name: "NoUnnecessaryStringConcatenation",
+  expression_visitor: Some(unnecessary_concatenation_expression_visitor),
+)
+
+const config: List(Rule) = [no_panic_rule, no_unnecessary_concatenation_rule]
+
 pub fn main() {
   case run() {
     Ok(Nil) -> io.println("Done.")
@@ -85,7 +106,8 @@ fn run() -> Result(Nil, WhingeError) {
     |> result.replace_error(CouldNotGetCurrentDirectory),
   )
   use knowledge_base <- result.try(read_project(curr_dir))
-  io.debug(contains_panics(knowledge_base))
+  let errors = visit_knowledge_base(knowledge_base, config)
+  io.debug(errors)
   Ok(Nil)
 }
 
@@ -107,7 +129,7 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
     |> result.replace_error(CouldNotGetSourceFiles),
   )
   use modules <- result.try(
-    list.try_map(src_files, fn(file) {
+    list.try_map(["src/debug.gleam"], fn(file) {
       let path =
         file
         |> string.drop_right(6)
@@ -126,132 +148,93 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
   Ok(KnowledgeBase(src_modules: modules, gloml: gloml))
 }
 
-fn contains_panics(kb: KnowledgeBase) -> List(RuleError) {
+fn visit_knowledge_base(kb: KnowledgeBase, rules: List(Rule)) -> List(RuleError) {
   use acc, Module(path, module) <- list.fold(kb.src_modules, [])
-  single_module_contains_panic(module)
-  |> list.append(concat_string_literals(module))
-  |> list.map(fn(f) { f(path) })
+  visit_module(path, rules, module)
   |> list.append(acc)
 }
 
-fn single_module_contains_panic(
+fn visit_module(
+  path: String,
+  rules: List(Rule),
   input_module: glance.Module,
-) -> List(fn(String) -> RuleError) {
-  // Panics are "expressions", so they'll only be found in functions
-  // and in constants.
-
-  let function_panics = {
-    use func <- list.flat_map(extract_functions(input_module))
-    use stmt <- list.flat_map(func.body)
-
-    let expr = case stmt {
-      glance.Use(_, expr) -> expr
-      glance.Assignment(value: val, ..) -> val
-      glance.Expression(expr) -> expr
-    }
-
-    do_visit_expressions(expr, [], fn(exp) {
-      case exp {
-        glance.Panic(_) -> {
-          Some(RuleError(
-            module: _,
-            function_name: func.name,
-            rule: "PanicFoundInFunction",
-            error: "Found `panic`",
-            details: [
-              "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
-              "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
-            ],
-          ))
-        }
-        _ -> None
+) -> List(RuleError) {
+  visit_expressions(input_module, fn(function_name, expr) {
+    list.flat_map(rules, fn(rule) {
+      case rule.expression_visitor {
+        Some(visitor) -> visitor(path, function_name, expr)
+        None -> []
       }
     })
-    |> option.values
-  }
-
-  // I don't think this is actually possible in Gleam, but it's
-  // possible within the logical structur of Glance so I'll keep
-  // it for now
-  let constant_panics = {
-    use const_ <- list.flat_map(extract_constants(input_module))
-    do_visit_expressions(const_.value, [], fn(expr) {
-      case expr {
-        glance.Panic(_) -> {
-          Some(RuleError(
-            module: _,
-            function_name: const_.name,
-            rule: "PanicFoundInConstant",
-            error: "Found `panic`",
-            details: [
-              "Using `panic` in a constant will prevent the application from running. It is only useful in functions, and even then, it should rarely be used.",
-            ],
-          ))
-        }
-        _ -> None
-      }
-    })
-    |> option.values
-  }
-
-  list.append(constant_panics, function_panics)
+  })
+  |> list.flatten
 }
 
-fn concat_string_literals(
-  input_module: glance.Module,
-) -> List(fn(String) -> RuleError) {
-  // Panics are "expressions", so they'll only be found in functions
-  // and in constants. We want to visit and produce errors for these
-  // individually because the functions will have location information
-  // we want to include in errors
-
-  let rule = {
-    use func <- list.flat_map(extract_functions(input_module))
-    use stmt <- list.flat_map(func.body)
-
-    let expr = case stmt {
-      glance.Use(_, expr) -> expr
-      glance.Assignment(value: val, ..) -> val
-      glance.Expression(expr) -> expr
+fn contains_panic_in_function_expression_visitor(
+  path: String,
+  location_identifier: String,
+  expr: glance.Expression,
+) -> List(RuleError) {
+  case expr {
+    glance.Panic(_) -> {
+      [
+        RuleError(
+          path: path,
+          location_identifier: location_identifier,
+          rule: "NoPanic",
+          error: "Found `panic`",
+          details: [
+            "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
+            "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
+          ],
+        ),
+      ]
     }
+    _ -> []
+  }
+}
 
-    let rule_name = "UnnecessaryStringConcatenation"
-
-    do_visit_expressions(expr, [], fn(exp) {
-      case exp {
-        glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
-        | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
-          Some(RuleError(
-            module: _,
-            function_name: func.name,
-            rule: rule_name,
-            error: "Unnecessary concatenation with an empty string",
-            details: [
-              "The result of adding an empty string to an expression is the expression itself.",
-              "You can remove the concatenation with \"\".",
-            ],
-          ))
-        }
-        glance.BinaryOperator(
-          glance.Concatenate,
-          glance.String(_),
-          glance.String(_),
-        ) -> {
-          Some(RuleError(
-            module: _,
-            function_name: func.name,
-            rule: rule_name,
-            error: "Unnecessary concatenation of string literals",
-            details: [
-              "Instead of concatenating these two string literals, they can be written as a single one.",
-              "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
-            ],
-          ))
-        }
-        _ -> None
-      }
-    })
-    |> option.values
+fn unnecessary_concatenation_expression_visitor(
+  path: String,
+  location_identifier: String,
+  expr: glance.Expression,
+) -> List(RuleError) {
+  let rule_name = "NoUnnecessaryStringConcatenation"
+  case expr {
+    glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
+    | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
+      [
+        RuleError(
+          path: path,
+          location_identifier: location_identifier,
+          rule: rule_name,
+          error: "Unnecessary concatenation with an empty string",
+          details: [
+            "The result of adding an empty string to an expression is the expression itself.",
+            "You can remove the concatenation with \"\".",
+          ],
+        ),
+      ]
+    }
+    glance.BinaryOperator(
+      glance.Concatenate,
+      glance.String(_),
+      glance.String(_),
+    ) -> {
+      [
+        RuleError(
+          path: path,
+          location_identifier: location_identifier,
+          rule: rule_name,
+          error: "Unnecessary concatenation of string literals",
+          details: [
+            "Instead of concatenating these two string literals, they can be written as a single one.",
+            "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
+          ],
+        ),
+      ]
+    }
+    _ -> []
   }
 }
 
@@ -275,7 +258,7 @@ fn extract_constants(from input: glance.Module) -> List(glance.Constant) {
 
 fn visit_expressions(
   input: glance.Module,
-  do f: fn(glance.Expression) -> a,
+  do f: fn(String, glance.Expression) -> a,
 ) -> List(a) {
   let funcs = extract_functions(input)
   let consts = extract_constants(input)
@@ -291,12 +274,14 @@ fn visit_expressions(
       glance.Expression(expr) -> expr
     }
 
-    do_visit_expressions(expr, [], f)
+    do_visit_expressions(expr, [], fn(expr) { f(func.name, expr) })
   }
 
   // Visit all the expressions in constants
   let const_results =
-    list.flat_map(consts, fn(c) { do_visit_expressions(c.value, [], f) })
+    list.flat_map(consts, fn(c) {
+      do_visit_expressions(c.value, [], fn(expr) { f(c.name, expr) })
+    })
   list.append(func_results, const_results)
 }
 
@@ -318,29 +303,37 @@ fn do_visit_expressions(
       do_visit_expressions(expr, acc, f)
 
     glance.Block(stmts) -> {
-      use stmt <- list.flat_map(stmts)
+      use sub_acc, stmt <- list.fold(stmts, acc)
       case stmt {
         // In a use statement, the "expression" should be
-        glance.Use(_, expr) -> do_visit_expressions(expr, acc, f)
-        glance.Assignment(value: expr, ..) -> do_visit_expressions(expr, acc, f)
-        glance.Expression(expr) -> do_visit_expressions(expr, acc, f)
+        glance.Use(_, expr) -> do_visit_expressions(expr, sub_acc, f)
+        glance.Assignment(value: expr, ..) ->
+          do_visit_expressions(expr, sub_acc, f)
+        glance.Expression(expr) -> do_visit_expressions(expr, sub_acc, f)
       }
     }
-    glance.Tuple(exprs) -> list.flat_map(exprs, do_visit_expressions(_, acc, f))
+    glance.Tuple(exprs) ->
+      list.fold(exprs, acc, fn(sub_acc, expr) {
+        do_visit_expressions(expr, sub_acc, f)
+      })
     glance.List(elements, rest) -> {
-      let elms = list.flat_map(elements, do_visit_expressions(_, acc, f))
+      let new_acc =
+        list.fold(elements, acc, fn(sub_acc, expr) {
+          do_visit_expressions(expr, sub_acc, f)
+        })
       case rest {
-        Some(expr) -> list.append(elms, do_visit_expressions(expr, acc, f))
-        None -> elms
+        Some(expr) -> do_visit_expressions(expr, new_acc, f)
+        None -> new_acc
       }
     }
     glance.Fn(arguments: _, return_annotation: _, body: body) -> {
-      use stmt <- list.flat_map(body)
+      use sub_acc, stmt <- list.fold(body, acc)
       case stmt {
         // In a use statement, the "expression" should be
-        glance.Use(_, expr) -> do_visit_expressions(expr, acc, f)
-        glance.Assignment(value: expr, ..) -> do_visit_expressions(expr, acc, f)
-        glance.Expression(expr) -> do_visit_expressions(expr, acc, f)
+        glance.Use(_, expr) -> do_visit_expressions(expr, sub_acc, f)
+        glance.Assignment(value: expr, ..) ->
+          do_visit_expressions(expr, sub_acc, f)
+        glance.Expression(expr) -> do_visit_expressions(expr, sub_acc, f)
       }
     }
     glance.RecordUpdate(
@@ -350,18 +343,18 @@ fn do_visit_expressions(
       fields: fields,
     ) -> {
       {
-        use #(_, expr) <- list.flat_map(fields)
-        do_visit_expressions(expr, acc, f)
+        use sub_acc, #(_, expr) <- list.fold(fields, acc)
+        do_visit_expressions(expr, sub_acc, f)
       }
-      |> list.append(do_visit_expressions(record, acc, f))
+      |> do_visit_expressions(record, _, f)
     }
     glance.FieldAccess(container: container, label: _) ->
       do_visit_expressions(container, acc, f)
     glance.Call(function, arguments) -> {
-      list.flat_map(arguments, fn(arg) {
-        do_visit_expressions(arg.item, acc, f)
+      list.fold(arguments, acc, fn(sub_acc, arg) {
+        do_visit_expressions(arg.item, sub_acc, f)
       })
-      |> list.append(do_visit_expressions(function, acc, f))
+      |> do_visit_expressions(function, _, f)
     }
     glance.TupleIndex(tuple, index: _) -> {
       do_visit_expressions(tuple, acc, f)
@@ -372,36 +365,34 @@ fn do_visit_expressions(
       arguments_before: arguments_before,
       arguments_after: arguments_after,
     ) -> {
-      list.flat_map(arguments_before, fn(arg) {
-        do_visit_expressions(arg.item, acc, f)
-      })
-      |> list.append(
-        list.flat_map(arguments_after, fn(arg) {
-          do_visit_expressions(arg.item, acc, f)
-        }),
+      list.fold(
+        list.append(arguments_before, arguments_after),
+        acc,
+        fn(sub_acc, arg) { do_visit_expressions(arg.item, sub_acc, f) },
       )
-      |> list.append(do_visit_expressions(function, acc, f))
+      |> do_visit_expressions(function, _, f)
     }
     glance.BitString(segments) -> {
-      use #(expr, _) <- list.flat_map(segments)
-      do_visit_expressions(expr, acc, f)
+      use sub_acc, #(expr, _) <- list.fold(segments, acc)
+      do_visit_expressions(expr, sub_acc, f)
     }
     glance.Case(subjects, clauses) -> {
-      list.flat_map(subjects, do_visit_expressions(_, acc, f))
-      |> list.append(
-        list.flat_map(clauses, fn(c) {
-          let glance.Clause(_, guard, body) = c
-          let body = do_visit_expressions(body, acc, f)
-          case guard {
-            Some(expr) -> list.append(body, do_visit_expressions(expr, acc, f))
-            None -> body
-          }
-        }),
-      )
+      let new_acc =
+        list.fold(subjects, acc, fn(sub_acc, expr) {
+          do_visit_expressions(expr, sub_acc, f)
+        })
+      list.fold(clauses, new_acc, fn(sub_acc, c) {
+        let glance.Clause(_, guard, body) = c
+        let sub_acc_2 = do_visit_expressions(body, sub_acc, f)
+        case guard {
+          Some(expr) -> do_visit_expressions(expr, sub_acc_2, f)
+          None -> sub_acc_2
+        }
+      })
     }
     glance.BinaryOperator(name: _, left: left, right: right) -> {
       do_visit_expressions(left, acc, f)
-      |> list.append(do_visit_expressions(right, acc, f))
+      |> do_visit_expressions(right, _, f)
     }
   }
 }
