@@ -9,7 +9,6 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
-
 import filepath
 import glance
 import simplifile
@@ -35,10 +34,15 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
   }
 }
 
-// Represents each rule we lint for.
-type Lint {
-  PanicFoundInFunction(module: String, function_name: String)
-  PanicFoundInConstant(module: String, name: String)
+// Represents an error reported by a rule.
+type RuleError {
+  RuleError(
+    module: String,
+    function_name: String,
+    rule: String,
+    error: String,
+    details: List(String),
+  )
 }
 
 // Represents information the linter has access to. We want this to include
@@ -122,16 +126,17 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
   Ok(KnowledgeBase(src_modules: modules, gloml: gloml))
 }
 
-fn contains_panics(kb: KnowledgeBase) -> List(Lint) {
+fn contains_panics(kb: KnowledgeBase) -> List(RuleError) {
   use acc, Module(path, module) <- list.fold(kb.src_modules, [])
   single_module_contains_panic(module)
+  |> list.append(concat_string_literals(module))
   |> list.map(fn(f) { f(path) })
   |> list.append(acc)
 }
 
 fn single_module_contains_panic(
   input_module: glance.Module,
-) -> List(fn(String) -> Lint) {
+) -> List(fn(String) -> RuleError) {
   // Panics are "expressions", so they'll only be found in functions
   // and in constants.
 
@@ -148,7 +153,16 @@ fn single_module_contains_panic(
     do_visit_expressions(expr, [], fn(exp) {
       case exp {
         glance.Panic(_) -> {
-          Some(PanicFoundInFunction(_, func.name))
+          Some(RuleError(
+            module: _,
+            function_name: func.name,
+            rule: "PanicFoundInFunction",
+            error: "Found `panic`",
+            details: [
+              "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
+              "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
+            ],
+          ))
         }
         _ -> None
       }
@@ -164,7 +178,15 @@ fn single_module_contains_panic(
     do_visit_expressions(const_.value, [], fn(expr) {
       case expr {
         glance.Panic(_) -> {
-          Some(PanicFoundInConstant(_, const_.name))
+          Some(RuleError(
+            module: _,
+            function_name: const_.name,
+            rule: "PanicFoundInConstant",
+            error: "Found `panic`",
+            details: [
+              "Using `panic` in a constant will prevent the application from running. It is only useful in functions, and even then, it should rarely be used.",
+            ],
+          ))
         }
         _ -> None
       }
@@ -173,6 +195,64 @@ fn single_module_contains_panic(
   }
 
   list.append(constant_panics, function_panics)
+}
+
+fn concat_string_literals(
+  input_module: glance.Module,
+) -> List(fn(String) -> RuleError) {
+  // Panics are "expressions", so they'll only be found in functions
+  // and in constants. We want to visit and produce errors for these
+  // individually because the functions will have location information
+  // we want to include in errors
+
+  let rule = {
+    use func <- list.flat_map(extract_functions(input_module))
+    use stmt <- list.flat_map(func.body)
+
+    let expr = case stmt {
+      glance.Use(_, expr) -> expr
+      glance.Assignment(value: val, ..) -> val
+      glance.Expression(expr) -> expr
+    }
+
+    let rule_name = "UnnecessaryStringConcatenation"
+
+    do_visit_expressions(expr, [], fn(exp) {
+      case exp {
+        glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
+        | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
+          Some(RuleError(
+            module: _,
+            function_name: func.name,
+            rule: rule_name,
+            error: "Unnecessary concatenation with an empty string",
+            details: [
+              "The result of adding an empty string to an expression is the expression itself.",
+              "You can remove the concatenation with \"\".",
+            ],
+          ))
+        }
+        glance.BinaryOperator(
+          glance.Concatenate,
+          glance.String(_),
+          glance.String(_),
+        ) -> {
+          Some(RuleError(
+            module: _,
+            function_name: func.name,
+            rule: rule_name,
+            error: "Unnecessary concatenation of string literals",
+            details: [
+              "Instead of concatenating these two string literals, they can be written as a single one.",
+              "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
+            ],
+          ))
+        }
+        _ -> None
+      }
+    })
+    |> option.values
+  }
 }
 
 // Extracts all the top level functions out of a glance module.
@@ -264,11 +344,11 @@ fn do_visit_expressions(
       }
     }
     glance.RecordUpdate(
-        module: _,
-        constructor: _,
-        record: record,
-        fields: fields,
-      ) -> {
+      module: _,
+      constructor: _,
+      record: record,
+      fields: fields,
+    ) -> {
       {
         use #(_, expr) <- list.flat_map(fields)
         do_visit_expressions(expr, acc, f)
@@ -287,11 +367,11 @@ fn do_visit_expressions(
       do_visit_expressions(tuple, acc, f)
     }
     glance.FnCapture(
-        label: _,
-        function: function,
-        arguments_before: arguments_before,
-        arguments_after: arguments_after,
-      ) -> {
+      label: _,
+      function: function,
+      arguments_before: arguments_before,
+      arguments_after: arguments_after,
+    ) -> {
       list.flat_map(arguments_before, fn(arg) {
         do_visit_expressions(arg.item, acc, f)
       })
