@@ -40,7 +40,7 @@ type RuleError {
     path: String,
     location_identifier: String,
     rule: String,
-    error: String,
+    message: String,
     details: List(String),
   )
 }
@@ -71,9 +71,7 @@ type Module {
 type Rule {
   Rule(
     name: String,
-    expression_visitor: option.Option(
-      fn(String, String, glance.Expression) -> List(RuleError),
-    ),
+    expression_visitor: option.Option(fn(glance.Expression) -> List(RuleError)),
   )
 }
 
@@ -159,10 +157,19 @@ fn visit_module(
   rules: List(Rule),
   input_module: glance.Module,
 ) -> List(RuleError) {
-  visit_expressions(input_module, fn(function_name, expr) {
+  visit_expressions(input_module, fn(location_identifier, expr) {
     list.flat_map(rules, fn(rule) {
       case rule.expression_visitor {
-        Some(visitor) -> visitor(path, function_name, expr)
+        Some(visitor) ->
+          visitor(expr)
+          |> list.map(fn(error) {
+            RuleError(
+              ..error,
+              path: path,
+              rule: rule.name,
+              location_identifier: location_identifier,
+            )
+          })
         None -> []
       }
     })
@@ -171,23 +178,15 @@ fn visit_module(
 }
 
 fn contains_panic_in_function_expression_visitor(
-  path: String,
-  location_identifier: String,
   expr: glance.Expression,
 ) -> List(RuleError) {
   case expr {
     glance.Panic(_) -> {
       [
-        RuleError(
-          path: path,
-          location_identifier: location_identifier,
-          rule: "NoPanic",
-          error: "Found `panic`",
-          details: [
-            "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
-            "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
-          ],
-        ),
+        error(message: "Found `panic`", details: [
+          "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
+          "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
+        ]),
       ]
     }
     _ -> []
@@ -195,20 +194,14 @@ fn contains_panic_in_function_expression_visitor(
 }
 
 fn unnecessary_concatenation_expression_visitor(
-  path: String,
-  location_identifier: String,
   expr: glance.Expression,
 ) -> List(RuleError) {
-  let rule_name = "NoUnnecessaryStringConcatenation"
   case expr {
     glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
     | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
       [
-        RuleError(
-          path: path,
-          location_identifier: location_identifier,
-          rule: rule_name,
-          error: "Unnecessary concatenation with an empty string",
+        error(
+          message: "Unnecessary concatenation with an empty string",
           details: [
             "The result of adding an empty string to an expression is the expression itself.",
             "You can remove the concatenation with \"\".",
@@ -222,16 +215,10 @@ fn unnecessary_concatenation_expression_visitor(
       glance.String(_),
     ) -> {
       [
-        RuleError(
-          path: path,
-          location_identifier: location_identifier,
-          rule: rule_name,
-          error: "Unnecessary concatenation of string literals",
-          details: [
-            "Instead of concatenating these two string literals, they can be written as a single one.",
-            "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
-          ],
-        ),
+        error(message: "Unnecessary concatenation of string literals", details: [
+          "Instead of concatenating these two string literals, they can be written as a single one.",
+          "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
+        ]),
       ]
     }
     _ -> []
@@ -395,4 +382,14 @@ fn do_visit_expressions(
       |> do_visit_expressions(right, _, f)
     }
   }
+}
+
+fn error(message message: String, details details: List(String)) -> RuleError {
+  RuleError(
+    path: "",
+    location_identifier: "",
+    rule: "",
+    message: message,
+    details: details,
+  )
 }
