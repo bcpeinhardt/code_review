@@ -9,7 +9,6 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
-
 import filepath
 import glance
 import simplifile
@@ -264,11 +263,11 @@ fn do_visit_expressions(
       }
     }
     glance.RecordUpdate(
-        module: _,
-        constructor: _,
-        record: record,
-        fields: fields,
-      ) -> {
+      module: _,
+      constructor: _,
+      record: record,
+      fields: fields,
+    ) -> {
       {
         use #(_, expr) <- list.flat_map(fields)
         do_visit_expressions(expr, acc, f)
@@ -287,11 +286,11 @@ fn do_visit_expressions(
       do_visit_expressions(tuple, acc, f)
     }
     glance.FnCapture(
-        label: _,
-        function: function,
-        arguments_before: arguments_before,
-        arguments_after: arguments_after,
-      ) -> {
+      label: _,
+      function: function,
+      arguments_before: arguments_before,
+      arguments_after: arguments_after,
+    ) -> {
       list.flat_map(arguments_before, fn(arg) {
         do_visit_expressions(arg.item, acc, f)
       })
