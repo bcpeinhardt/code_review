@@ -92,6 +92,12 @@ const unnecessary_concatenation_rule: Rule = Rule(
   expression_visitor: Some(unnecessary_concatenation_expression_visitor),
 )
 
+const config: List(Rule) = [
+  function_panic_rule,
+  constant_panic_rule,
+  unnecessary_concatenation_rule,
+]
+
 pub fn main() {
   case run() {
     Ok(Nil) -> io.println("Done.")
