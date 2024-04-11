@@ -34,9 +34,9 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
   }
 }
 
-// Represents each rule we lint for.
-type Lint {
-  Lint(
+// Represents an error reported by a rule.
+type RuleError {
+  RuleError(
     module: String,
     function_name: String,
     rule: String,
@@ -126,7 +126,7 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
   Ok(KnowledgeBase(src_modules: modules, gloml: gloml))
 }
 
-fn contains_panics(kb: KnowledgeBase) -> List(Lint) {
+fn contains_panics(kb: KnowledgeBase) -> List(RuleError) {
   use acc, Module(path, module) <- list.fold(kb.src_modules, [])
   single_module_contains_panic(module)
   |> list.append(concat_string_literals(module))
@@ -136,7 +136,7 @@ fn contains_panics(kb: KnowledgeBase) -> List(Lint) {
 
 fn single_module_contains_panic(
   input_module: glance.Module,
-) -> List(fn(String) -> Lint) {
+) -> List(fn(String) -> RuleError) {
   // Panics are "expressions", so they'll only be found in functions
   // and in constants.
 
@@ -153,7 +153,7 @@ fn single_module_contains_panic(
     do_visit_expressions(expr, [], fn(exp) {
       case exp {
         glance.Panic(_) -> {
-          Some(Lint(
+          Some(RuleError(
             module: _,
             function_name: func.name,
             rule: "PanicFoundInFunction",
@@ -178,7 +178,7 @@ fn single_module_contains_panic(
     do_visit_expressions(const_.value, [], fn(expr) {
       case expr {
         glance.Panic(_) -> {
-          Some(Lint(
+          Some(RuleError(
             module: _,
             function_name: const_.name,
             rule: "PanicFoundInConstant",
@@ -199,7 +199,7 @@ fn single_module_contains_panic(
 
 fn concat_string_literals(
   input_module: glance.Module,
-) -> List(fn(String) -> Lint) {
+) -> List(fn(String) -> RuleError) {
   // Panics are "expressions", so they'll only be found in functions
   // and in constants. We want to visit and produce errors for these
   // individually because the functions will have location information
@@ -222,7 +222,7 @@ fn concat_string_literals(
           glance.String(_),
           glance.String(_),
         ) -> {
-          Some(Lint(
+          Some(RuleError(
             module: _,
             function_name: func.name,
             rule: "UnnecessaryStringConcatenation",
