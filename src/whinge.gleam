@@ -129,7 +129,7 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
     |> result.replace_error(CouldNotGetSourceFiles),
   )
   use modules <- result.try(
-    list.try_map(src_files, fn(file) {
+    list.try_map(["src/debug.gleam"], fn(file) {
       let path =
         file
         |> string.drop_right(6)
