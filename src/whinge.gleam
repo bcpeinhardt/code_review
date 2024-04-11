@@ -38,6 +38,7 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
 type Lint {
   PanicFoundInFunction(module: String, function_name: String)
   PanicFoundInConstant(module: String, name: String)
+  UnnecessaryStringConcatenation(module: String, function_name: String)
 }
 
 // Represents information the linter has access to. We want this to include
@@ -124,6 +125,7 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
 fn contains_panics(kb: KnowledgeBase) -> List(Lint) {
   use acc, Module(path, module) <- list.fold(kb.src_modules, [])
   single_module_contains_panic(module)
+  |> list.append(concat_string_literals(module))
   |> list.map(fn(f) { f(path) })
   |> list.append(acc)
 }
@@ -172,6 +174,40 @@ fn single_module_contains_panic(
   }
 
   list.append(constant_panics, function_panics)
+}
+
+fn concat_string_literals(
+  input_module: glance.Module,
+) -> List(fn(String) -> Lint) {
+  // Panics are "expressions", so they'll only be found in functions
+  // and in constants. We want to visit and produce errors for these
+  // individually because the functions will have location information
+  // we want to include in errors
+
+  let rule = {
+    use func <- list.flat_map(extract_functions(input_module))
+    use stmt <- list.flat_map(func.body)
+
+    let expr = case stmt {
+      glance.Use(_, expr) -> expr
+      glance.Assignment(value: val, ..) -> val
+      glance.Expression(expr) -> expr
+    }
+
+    do_visit_expressions(expr, [], fn(exp) {
+      case exp {
+        glance.BinaryOperator(
+          glance.Concatenate,
+          glance.String(_),
+          glance.String(_),
+        ) -> {
+          Some(UnnecessaryStringConcatenation(_, func.name))
+        }
+        _ -> None
+      }
+    })
+    |> option.values
+  }
 }
 
 // Extracts all the top level functions out of a glance module.
