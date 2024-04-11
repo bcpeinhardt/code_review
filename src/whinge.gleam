@@ -36,9 +36,7 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
 
 // Represents each rule we lint for.
 type Lint {
-  PanicFoundInFunction(module: String, function_name: String)
-  PanicFoundInConstant(module: String, name: String)
-  UnnecessaryStringConcatenation(module: String, function_name: String)
+  Lint(module: String, function_name: String, rule: String, error: String)
 }
 
 // Represents information the linter has access to. We want this to include
@@ -149,7 +147,12 @@ fn single_module_contains_panic(
     do_visit_expressions(expr, [], fn(exp) {
       case exp {
         glance.Panic(_) -> {
-          Some(PanicFoundInFunction(_, func.name))
+          Some(Lint(
+            module: _,
+            function_name: func.name,
+            rule: "PanicFoundInFunction",
+            error: "Found `panic`",
+          ))
         }
         _ -> None
       }
@@ -165,7 +168,12 @@ fn single_module_contains_panic(
     do_visit_expressions(const_.value, [], fn(expr) {
       case expr {
         glance.Panic(_) -> {
-          Some(PanicFoundInConstant(_, const_.name))
+          Some(Lint(
+            module: _,
+            function_name: const_.name,
+            rule: "PanicFoundInConstant",
+            error: "Found `panic`",
+          ))
         }
         _ -> None
       }
@@ -201,7 +209,12 @@ fn concat_string_literals(
           glance.String(_),
           glance.String(_),
         ) -> {
-          Some(UnnecessaryStringConcatenation(_, func.name))
+          Some(Lint(
+            module: _,
+            function_name: func.name,
+            rule: "UnnecessaryStringConcatenation",
+            error: "Unnecessary concatenation of string literals",
+          ))
         }
         _ -> None
       }
