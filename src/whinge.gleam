@@ -38,7 +38,7 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
 type RuleError {
   RuleError(
     path: String,
-    function_name: String,
+    location_identifier: String,
     rule: String,
     error: String,
     details: List(String),
@@ -172,7 +172,7 @@ fn visit_module(
 
 fn contains_panic_in_function_expression_visitor(
   path: String,
-  function_name: String,
+  location_identifier: String,
   expr: glance.Expression,
 ) -> List(RuleError) {
   case expr {
@@ -180,7 +180,7 @@ fn contains_panic_in_function_expression_visitor(
       [
         RuleError(
           path: path,
-          function_name: function_name,
+          location_identifier: location_identifier,
           rule: "NoPanic",
           error: "Found `panic`",
           details: [
@@ -196,7 +196,7 @@ fn contains_panic_in_function_expression_visitor(
 
 fn unnecessary_concatenation_expression_visitor(
   path: String,
-  function_name: String,
+  location_identifier: String,
   expr: glance.Expression,
 ) -> List(RuleError) {
   let rule_name = "NoUnnecessaryStringConcatenation"
@@ -206,7 +206,7 @@ fn unnecessary_concatenation_expression_visitor(
       [
         RuleError(
           path: path,
-          function_name: function_name,
+          location_identifier: location_identifier,
           rule: rule_name,
           error: "Unnecessary concatenation with an empty string",
           details: [
@@ -224,7 +224,7 @@ fn unnecessary_concatenation_expression_visitor(
       [
         RuleError(
           path: path,
-          function_name: function_name,
+          location_identifier: location_identifier,
           rule: rule_name,
           error: "Unnecessary concatenation of string literals",
           details: [
