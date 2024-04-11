@@ -68,6 +68,30 @@ type Module {
   )
 }
 
+type Rule {
+  Rule(
+    name: String,
+    expression_visitor: option.Option(
+      fn(String, glance.Expression) -> option.Option(fn(String) -> RuleError),
+    ),
+  )
+}
+
+const function_panic_rule: Rule = Rule(
+  name: "PanicFoundInFunction",
+  expression_visitor: Some(contains_panic_in_function_expression_visitor),
+)
+
+const constant_panic_rule: Rule = Rule(
+  name: "PanicFoundInConstant",
+  expression_visitor: Some(contains_panic_in_constant_expression_visitor),
+)
+
+const unnecessary_concatenation_rule: Rule = Rule(
+  name: "UnnecessaryStringConcatenation",
+  expression_visitor: Some(unnecessary_concatenation_expression_visitor),
+)
+
 pub fn main() {
   case run() {
     Ok(Nil) -> io.println("Done.")
