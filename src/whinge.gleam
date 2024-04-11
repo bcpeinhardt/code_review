@@ -171,7 +171,7 @@ fn single_module_contains_panic(
   }
 
   // I don't think this is actually possible in Gleam, but it's
-  // possible within the logical structur of Glance so I'll keep
+  // possible within the logical structure of Glance so I'll keep
   // it for now
   let constant_panics = {
     use const_ <- list.flat_map(extract_constants(input_module))
