@@ -215,43 +215,49 @@ fn concat_string_literals(
       glance.Expression(expr) -> expr
     }
 
-    let rule_name = "UnnecessaryStringConcatenation"
-
-    do_visit_expressions(expr, [], fn(exp) {
-      case exp {
-        glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
-        | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
-          Some(RuleError(
-            module: _,
-            function_name: func.name,
-            rule: rule_name,
-            error: "Unnecessary concatenation with an empty string",
-            details: [
-              "The result of adding an empty string to an expression is the expression itself.",
-              "You can remove the concatenation with \"\".",
-            ],
-          ))
-        }
-        glance.BinaryOperator(
-          glance.Concatenate,
-          glance.String(_),
-          glance.String(_),
-        ) -> {
-          Some(RuleError(
-            module: _,
-            function_name: func.name,
-            rule: rule_name,
-            error: "Unnecessary concatenation of string literals",
-            details: [
-              "Instead of concatenating these two string literals, they can be written as a single one.",
-              "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
-            ],
-          ))
-        }
-        _ -> None
-      }
+    do_visit_expressions(expr, [], fn(expr_) {
+      unnecessary_concatenation_expression_visitor(func.name, expr_)
     })
     |> option.values
+  }
+}
+
+fn unnecessary_concatenation_expression_visitor(
+  function_name: String,
+  expr: glance.Expression,
+) {
+  let rule_name = "UnnecessaryStringConcatenation"
+  case expr {
+    glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
+    | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
+      Some(RuleError(
+        module: _,
+        function_name: function_name,
+        rule: rule_name,
+        error: "Unnecessary concatenation with an empty string",
+        details: [
+          "The result of adding an empty string to an expression is the expression itself.",
+          "You can remove the concatenation with \"\".",
+        ],
+      ))
+    }
+    glance.BinaryOperator(
+      glance.Concatenate,
+      glance.String(_),
+      glance.String(_),
+    ) -> {
+      Some(RuleError(
+        module: _,
+        function_name: function_name,
+        rule: rule_name,
+        error: "Unnecessary concatenation of string literals",
+        details: [
+          "Instead of concatenating these two string literals, they can be written as a single one.",
+          "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
+        ],
+      ))
+    }
+    _ -> None
   }
 }
 
