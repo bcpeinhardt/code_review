@@ -72,7 +72,7 @@ type Rule {
   Rule(
     name: String,
     expression_visitor: option.Option(
-      fn(String, String, glance.Expression) -> option.Option(RuleError),
+      fn(String, String, glance.Expression) -> List(RuleError),
     ),
   )
 }
@@ -169,25 +169,24 @@ fn visit_module(
   input_module: glance.Module,
 ) -> List(RuleError) {
   visit_expressions(input_module, fn(function_name, expr) {
-    list.map(rules, fn(rule) {
+    list.flat_map(rules, fn(rule) {
       case rule.expression_visitor {
         Some(visitor) -> visitor(path, function_name, expr)
-        None -> None
+        None -> []
       }
     })
   })
   |> list.flatten
-  |> option.values
 }
 
 fn contains_panic_in_function_expression_visitor(
   path: String,
   function_name: String,
   expr: glance.Expression,
-) -> option.Option(RuleError) {
+) -> List(RuleError) {
   case expr {
     glance.Panic(_) -> {
-      Some(
+      [
         RuleError(
           path: path,
           function_name: function_name,
@@ -198,9 +197,9 @@ fn contains_panic_in_function_expression_visitor(
             "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
           ],
         ),
-      )
+      ]
     }
-    _ -> None
+    _ -> []
   }
 }
 
@@ -208,10 +207,10 @@ fn contains_panic_in_constant_expression_visitor(
   path: String,
   function_name: String,
   expr: glance.Expression,
-) -> option.Option(RuleError) {
+) -> List(RuleError) {
   case expr {
     glance.Panic(_) -> {
-      Some(
+      [
         RuleError(
           path: path,
           function_name: function_name,
@@ -221,9 +220,9 @@ fn contains_panic_in_constant_expression_visitor(
             "Using `panic` in a constant will prevent the application from running. It is only useful in functions, and even then, it should rarely be used.",
           ],
         ),
-      )
+      ]
     }
-    _ -> None
+    _ -> []
   }
 }
 
@@ -231,12 +230,12 @@ fn unnecessary_concatenation_expression_visitor(
   path: String,
   function_name: String,
   expr: glance.Expression,
-) -> option.Option(RuleError) {
+) -> List(RuleError) {
   let rule_name = "UnnecessaryStringConcatenation"
   case expr {
     glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
     | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
-      Some(
+      [
         RuleError(
           path: path,
           function_name: function_name,
@@ -247,14 +246,14 @@ fn unnecessary_concatenation_expression_visitor(
             "You can remove the concatenation with \"\".",
           ],
         ),
-      )
+      ]
     }
     glance.BinaryOperator(
       glance.Concatenate,
       glance.String(_),
       glance.String(_),
     ) -> {
-      Some(
+      [
         RuleError(
           path: path,
           function_name: function_name,
@@ -265,9 +264,9 @@ fn unnecessary_concatenation_expression_visitor(
             "For instance, instead of \"a\" <> \"b\", you could write that as \"ab\".",
           ],
         ),
-      )
+      ]
     }
-    _ -> None
+    _ -> []
   }
 }
 
