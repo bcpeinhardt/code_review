@@ -82,12 +82,12 @@ const no_panic_rule: Rule = Rule(
   expression_visitor: Some(contains_panic_in_function_expression_visitor),
 )
 
-const unnecessary_concatenation_rule: Rule = Rule(
-  name: "UnnecessaryStringConcatenation",
+const no_unnecessary_concatenation_rule: Rule = Rule(
+  name: "NoUnnecessaryStringConcatenation",
   expression_visitor: Some(unnecessary_concatenation_expression_visitor),
 )
 
-const config: List(Rule) = [no_panic_rule, unnecessary_concatenation_rule]
+const config: List(Rule) = [no_panic_rule, no_unnecessary_concatenation_rule]
 
 pub fn main() {
   case run() {
@@ -199,7 +199,7 @@ fn unnecessary_concatenation_expression_visitor(
   function_name: String,
   expr: glance.Expression,
 ) -> List(RuleError) {
-  let rule_name = "UnnecessaryStringConcatenation"
+  let rule_name = "NoUnnecessaryStringConcatenation"
   case expr {
     glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
     | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {
