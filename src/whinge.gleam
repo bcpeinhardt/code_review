@@ -168,19 +168,10 @@ fn visit_module(
   rules: List(Rule),
   input_module: glance.Module,
 ) -> List(RuleError) {
-  use func <- list.flat_map(extract_functions(input_module))
-  use stmt <- list.flat_map(func.body)
-
-  let expr = case stmt {
-    glance.Use(_, expr) -> expr
-    glance.Assignment(value: val, ..) -> val
-    glance.Expression(expr) -> expr
-  }
-
-  do_visit_expressions(expr, [], fn(exp) {
+  visit_expressions(input_module, fn(function_name, expr) {
     list.map(rules, fn(rule) {
       case rule.expression_visitor {
-        Some(visitor) -> visitor(path, func.name, exp)
+        Some(visitor) -> visitor(path, function_name, expr)
         None -> None
       }
     })
@@ -300,7 +291,7 @@ fn extract_constants(from input: glance.Module) -> List(glance.Constant) {
 
 fn visit_expressions(
   input: glance.Module,
-  do f: fn(glance.Expression) -> a,
+  do f: fn(String, glance.Expression) -> a,
 ) -> List(a) {
   let funcs = extract_functions(input)
   let consts = extract_constants(input)
@@ -316,12 +307,14 @@ fn visit_expressions(
       glance.Expression(expr) -> expr
     }
 
-    do_visit_expressions(expr, [], f)
+    do_visit_expressions(expr, [], fn(expr) { f(func.name, expr) })
   }
 
   // Visit all the expressions in constants
   let const_results =
-    list.flat_map(consts, fn(c) { do_visit_expressions(c.value, [], f) })
+    list.flat_map(consts, fn(c) {
+      do_visit_expressions(c.value, [], fn(expr) { f(c.name, expr) })
+    })
   list.append(func_results, const_results)
 }
 
