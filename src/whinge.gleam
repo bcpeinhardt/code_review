@@ -3,18 +3,18 @@
 //// based on the glance module that get's parsed, and produce messages pointing out 
 //// the issue.
 
+import filepath
+import glance
 import gleam/dict.{type Dict}
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
-import filepath
-import glance
 import simplifile
 import tom
 
-type WhingeError {
+pub type WhingeError {
   CouldNotGetCurrentDirectory
   CouldNotGetSourceFiles
   CouldNotReadAllSourceFiles
@@ -35,7 +35,7 @@ fn whinge_error_to_error_message(input: WhingeError) -> String {
 }
 
 // Represents an error reported by a rule.
-type RuleError {
+pub type RuleError {
   RuleError(
     path: String,
     location_identifier: String,
@@ -43,6 +43,23 @@ type RuleError {
     error: String,
     details: List(String),
   )
+}
+
+// Responsible for printing a rule error to the console
+// TODO: Just an initial repr for testing, someone good at making things pretty 
+// will need to update this
+pub fn display_rule_error(input: RuleError) -> String {
+  "Path: "
+  <> input.path
+  <> "\n"
+  <> "\nLocation Identifier: "
+  <> input.location_identifier
+  <> "\nRule: "
+  <> input.rule
+  <> "\nError: "
+  <> input.error
+  <> "\nDetails: "
+  <> string.join(input.details, with: "\n")
 }
 
 // Represents information the linter has access to. We want this to include
@@ -89,9 +106,21 @@ const no_unnecessary_concatenation_rule: Rule = Rule(
 
 const config: List(Rule) = [no_panic_rule, no_unnecessary_concatenation_rule]
 
-pub fn main() {
-  case run() {
-    Ok(Nil) -> io.println("Done.")
+pub fn main() -> Result(Nil, WhingeError) {
+  // Get the current directory
+  use curr_dir <- result.map(
+    simplifile.current_directory()
+    |> result.replace_error(CouldNotGetCurrentDirectory),
+  )
+
+  // Run the linter
+  case run(curr_dir) {
+    Ok(errors) ->
+      list.each(errors, fn(e) {
+        e
+        |> display_rule_error
+        |> io.println
+      })
     Error(e) ->
       io.print_error(
         e
@@ -100,15 +129,11 @@ pub fn main() {
   }
 }
 
-fn run() -> Result(Nil, WhingeError) {
-  use curr_dir <- result.try(
-    simplifile.current_directory()
-    |> result.replace_error(CouldNotGetCurrentDirectory),
-  )
-  use knowledge_base <- result.try(read_project(curr_dir))
+// Run the linter on a project at `directory`
+pub fn run(on directory: String) -> Result(List(RuleError), WhingeError) {
+  use knowledge_base <- result.try(read_project(directory))
   let errors = visit_knowledge_base(knowledge_base, config)
-  io.debug(errors)
-  Ok(Nil)
+  Ok(errors)
 }
 
 // Read's in all the information the linter needs 
@@ -128,11 +153,9 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
     simplifile.get_files(filepath.join(project_root_path, "src"))
     |> result.replace_error(CouldNotGetSourceFiles),
   )
+
   use modules <- result.try(
-    list.try_map(["src/debug.gleam"], fn(file) {
-      let path =
-        file
-        |> string.drop_right(6)
+    list.try_map(src_files, fn(file) {
       use content <- result.try(
         simplifile.read(file)
         |> result.replace_error(CouldNotReadAllSourceFiles),
@@ -141,7 +164,7 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
         glance.module(content)
         |> result.replace_error(CouldNotParseAllModules),
       )
-      Ok(Module(path, module))
+      Ok(Module(file, module))
     }),
   )
 

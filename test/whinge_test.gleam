@@ -1,12 +1,20 @@
+import gleam/list
+import birdie
 import gleeunit
-import gleeunit/should
+import whinge
 
 pub fn main() {
   gleeunit.main()
 }
 
-// gleeunit test functions end in `_test`
-pub fn hello_world_test() {
-  1
-  |> should.equal(1)
+// This is gonna be our initial testing setup for quick development
+// while there are lots of moving pieces.
+// 
+pub fn smoke_test() {
+  let assert Ok(rules) = whinge.run(on: "./snap_dummy")
+  use rule <- list.each(rules)
+
+  rule
+  |> whinge.display_rule_error
+  |> birdie.snap(title: rule.path)
 }
