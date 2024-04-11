@@ -109,7 +109,8 @@ fn run() -> Result(Nil, WhingeError) {
     |> result.replace_error(CouldNotGetCurrentDirectory),
   )
   use knowledge_base <- result.try(read_project(curr_dir))
-  io.debug(contains_panics(knowledge_base))
+  let errors = contains_panics(knowledge_base)
+  io.debug(errors)
   Ok(Nil)
 }
 
