@@ -39,6 +39,17 @@ pub fn with_expression_visitor(
   )
 }
 
+fn combine_visitors(new_visitor: fn(glance.Expression) -> List(RuleError), maybe_previous_visitor: option.Option(fn(glance.Expression) -> List(RuleError))) {
+  case maybe_previous_visitor {
+    option.None-> new_visitor
+    option.Some(previous_visitor)-> fn(a, context) {
+       let #( errors_after_first_visit, context_after_first_visit ) = previous_visitor(a, context)
+       let #( errors_after_second_visit, context_after_second_visit ) = new_visitor(a, context_after_first_visit)
+       ( List.append errors_after_first_visit errors_after_second_visit, context_after_second_visit )
+    }
+  }
+}
+
 fn set_rule_name_on_errors(name: String, visitor: fn(a) -> List(RuleError)) {
   fn(a: a) {
     visitor(a)
