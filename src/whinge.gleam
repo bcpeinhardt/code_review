@@ -154,19 +154,15 @@ fn visit_module(
 ) -> List(RuleError) {
   visit_expressions(input_module, fn(location_identifier, expr) {
     list.flat_map(rules, fn(rule) {
-      case rule.expression_visitor {
-        Some(visitor) ->
-          visitor(expr)
-          |> list.map(fn(error) {
-            RuleError(
-              ..error,
-              path: path,
-              rule: rule.name,
-              location_identifier: location_identifier,
-            )
-          })
-        None -> []
-      }
+      list.flat_map(rule.expression_visitors, fn(visitor) { visitor(expr) })
+      |> list.map(fn(error) {
+        RuleError(
+          ..error,
+          path: path,
+          rule: rule.name,
+          location_identifier: location_identifier,
+        )
+      })
     })
   })
   |> list.flatten
