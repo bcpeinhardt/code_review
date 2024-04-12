@@ -191,10 +191,16 @@ fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError)
     })
   }
 
-  // Visit all the expressions in top level functions
-  let func_results: List(RuleError) = {
-    use func <- list.flat_map(funcs)
-    use stmt <- list.flat_map(func.body)
+  // Visit all constants
+  let results_after_const: List(RuleError) =
+    list.fold(consts, [], fn(const_acc, c) {
+      do_visit_expressions(c.value, const_acc, fn(expr) { f(c.name, expr) })
+    })
+
+  // Visit all top level functions
+  let results_after_functions: List(RuleError) = {
+    use acc0, func <- list.fold(funcs, results_after_const)
+    use acc1, stmt <- list.fold(func.body, acc0)
 
     let expr = case stmt {
       glance.Use(_, expr) -> expr
@@ -202,25 +208,18 @@ fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError)
       glance.Expression(expr) -> expr
     }
 
-    do_visit_expressions(expr, [], fn(expr) { f(func.name, expr) })
-    |> list.flatten
+    do_visit_expressions(expr, acc1, fn(expr) { f(func.name, expr) })
   }
 
-  // Visit all the expressions in constants
-  let const_results: List(RuleError) =
-    list.flat_map(consts, fn(c) {
-      do_visit_expressions(c.value, [], fn(expr) { f(c.name, expr) })
-    })
-    |> list.flatten
-  list.append(func_results, const_results)
+  results_after_functions
 }
 
 fn do_visit_expressions(
   input: glance.Expression,
-  acc: List(a),
-  do f: fn(glance.Expression) -> a,
-) -> List(a) {
-  let acc = [f(input), ..acc]
+  acc: List(RuleError),
+  do f: fn(glance.Expression) -> List(RuleError),
+) -> List(RuleError) {
+  let acc: List(RuleError) = list.append(f(input), acc)
   case input {
     glance.Todo(_)
     | glance.Panic(_)
