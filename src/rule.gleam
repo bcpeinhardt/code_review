@@ -1,4 +1,5 @@
 import glance
+import gleam/list
 
 pub type Rule {
   Rule(
@@ -16,14 +17,33 @@ pub fn with_function_visitor(
   rule: Rule,
   visitor: fn(glance.Function) -> List(RuleError),
 ) {
-  Rule(..rule, function_visitors: [visitor, ..rule.function_visitors])
+  Rule(
+    ..rule,
+    function_visitors: [
+      set_rule_name_on_errors(rule.name, visitor),
+      ..rule.function_visitors
+    ],
+  )
 }
 
 pub fn with_expression_visitor(
   rule: Rule,
   visitor: fn(glance.Expression) -> List(RuleError),
 ) {
-  Rule(..rule, expression_visitors: [visitor, ..rule.expression_visitors])
+  Rule(
+    ..rule,
+    expression_visitors: [
+      set_rule_name_on_errors(rule.name, visitor),
+      ..rule.expression_visitors
+    ],
+  )
+}
+
+fn set_rule_name_on_errors(name: String, visitor: fn(a) -> List(RuleError)) {
+  fn(a: a) {
+    visitor(a)
+    |> list.map(fn(error) { RuleError(..error, rule: name) })
+  }
 }
 
 // Represents an error reported by a rule.

@@ -182,11 +182,7 @@ fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError)
     list.flat_map(rules, fn(rule) {
       list.flat_map(rule.expression_visitors, fn(visitor) { visitor(expr) })
       |> list.map(fn(error) {
-        RuleError(
-          ..error,
-          rule: rule.name,
-          location_identifier: location_identifier,
-        )
+        RuleError(..error, location_identifier: location_identifier)
       })
     })
   }
