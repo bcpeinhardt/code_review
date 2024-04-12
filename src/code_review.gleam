@@ -206,24 +206,30 @@ fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError)
       list.append(errors_for_func, acc0),
     )
 
-    let expr: glance.Expression = case stmt {
-      glance.Use(_, expr) -> expr
-      glance.Assignment(value: val, ..) -> val
-      glance.Expression(expr) -> expr
-    }
-
     list.append(
-      do_visit_expressions(expr, [], fn(expr) {
-        apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
+      visit_statement(stmt, rules)
         |> list.map(fn(error) {
-          RuleError(..error, location_identifier: func.name)
-        })
+        RuleError(..error, location_identifier: func.name)
       }),
       acc1,
     )
   }
 
   results_after_functions
+}
+
+fn visit_statement(
+  statement: glance.Statement,
+  rules: List(Rule),
+) -> List(RuleError) {
+  let expr: glance.Expression = case statement {
+    glance.Use(_, expr) -> expr
+    glance.Assignment(value: val, ..) -> val
+    glance.Expression(expr) -> expr
+  }
+  do_visit_expressions(expr, [], fn(expr) {
+    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
+  })
 }
 
 fn apply_visitor(
