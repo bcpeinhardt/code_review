@@ -148,20 +148,8 @@ fn visit_knowledge_base(kb: KnowledgeBase, rules: List(Rule)) -> List(RuleError)
   |> list.append(acc)
 }
 
-// Extracts all the top level functions out of a glance module.
-fn extract_functions(from input: glance.Module) -> List(glance.Function) {
-  let glance.Module(functions: function_defs, ..) = input
-  let _functions =
-    list.map(function_defs, fn(def) {
-      let glance.Definition(_, func) = def
-      func
-    })
-}
-
 fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
-  let glance.Module(constants: constants, ..) = input
-
-  let funcs = extract_functions(input)
+  let glance.Module(constants: constants, functions: functions, ..) = input
 
   let f = fn(location_identifier, expr) {
     apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
@@ -179,7 +167,10 @@ fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
 
   // Visit all top level functions
   let results_after_functions: List(RuleError) = {
-    use acc0: List(RuleError), func <- list.fold(funcs, results_after_const)
+    use acc0: List(RuleError), glance.Definition(_, func) <- list.fold(
+      functions,
+      results_after_const,
+    )
 
     let errors_for_func: List(RuleError) =
       apply_visitor(func, rules, fn(rule) { rule.function_visitors })
