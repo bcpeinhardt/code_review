@@ -3,12 +3,20 @@ import glance
 pub type Rule {
   Rule(
     name: String,
+    function_visitors: List(fn(glance.Function) -> List(RuleError)),
     expression_visitors: List(fn(glance.Expression) -> List(RuleError)),
   )
 }
 
 pub fn new(name: String) {
-  Rule(name: name, expression_visitors: [])
+  Rule(name: name, function_visitors: [], expression_visitors: [])
+}
+
+pub fn with_function_visitor(
+  rule: Rule,
+  visitor: fn(glance.Function) -> List(RuleError),
+) {
+  Rule(..rule, function_visitors: [visitor, ..rule.function_visitors])
 }
 
 pub fn with_expression_visitor(
