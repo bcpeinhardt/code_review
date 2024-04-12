@@ -153,33 +153,8 @@ fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
 
   // Visit all constants
   let results_after_const: List(RuleError) = visit_constants(constants, rules)
-
-  // Visit all top level functions
-  let results_after_functions: List(RuleError) = {
-    use acc0: List(RuleError), glance.Definition(_, func) <- list.fold(
-      functions,
-      results_after_const,
-    )
-
-    let errors_for_func: List(RuleError) =
-      apply_visitor(func, rules, fn(rule) { rule.function_visitors })
-      |> list.map(fn(error) {
-        RuleError(..error, location_identifier: func.name)
-      })
-
-    use acc1: List(RuleError), stmt <- list.fold(
-      func.body,
-      list.append(errors_for_func, acc0),
-    )
-
-    list.append(
-      visit_statement(stmt, rules)
-        |> list.map(fn(error) {
-        RuleError(..error, location_identifier: func.name)
-      }),
-      acc1,
-    )
-  }
+  let results_after_functions: List(RuleError) =
+    visit_functions(functions, rules, results_after_const)
 
   results_after_functions
 }
@@ -199,6 +174,34 @@ fn visit_constants(
     let glance.Definition(_, c) = constant_with_definition
     do_visit_expressions(c.value, const_acc, fn(expr) { f(c.name, expr) })
   })
+}
+
+fn visit_functions(
+  functions: List(glance.Definition(glance.Function)),
+  rules: List(Rule),
+  acc: List(RuleError),
+) {
+  use acc0: List(RuleError), glance.Definition(_, func) <- list.fold(
+    functions,
+    acc,
+  )
+
+  let errors_for_func: List(RuleError) =
+    apply_visitor(func, rules, fn(rule) { rule.function_visitors })
+    |> list.map(fn(error) { RuleError(..error, location_identifier: func.name) })
+
+  use acc1: List(RuleError), stmt <- list.fold(
+    func.body,
+    list.append(errors_for_func, acc0),
+  )
+
+  list.append(
+    visit_statement(stmt, rules)
+      |> list.map(fn(error) {
+      RuleError(..error, location_identifier: func.name)
+    }),
+    acc1,
+  )
 }
 
 fn visit_statement(
