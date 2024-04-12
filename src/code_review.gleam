@@ -158,17 +158,10 @@ fn extract_functions(from input: glance.Module) -> List(glance.Function) {
     })
 }
 
-fn extract_constants(from input: glance.Module) -> List(glance.Constant) {
-  let glance.Module(constants: consts, ..) = input
-  list.map(consts, fn(const_) {
-    let glance.Definition(_, c) = const_
-    c
-  })
-}
-
 fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
+  let glance.Module(constants: constants, ..) = input
+
   let funcs = extract_functions(input)
-  let consts = extract_constants(input)
 
   let f = fn(location_identifier, expr) {
     apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
@@ -179,7 +172,8 @@ fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
 
   // Visit all constants
   let results_after_const: List(RuleError) =
-    list.fold(consts, [], fn(const_acc, c) {
+    list.fold(constants, [], fn(const_acc, constant_with_definition) {
+      let glance.Definition(_, c) = constant_with_definition
       do_visit_expressions(c.value, const_acc, fn(expr) { f(c.name, expr) })
     })
 
