@@ -2,6 +2,7 @@ import birdie
 import code_review
 import gleam/list
 import gleeunit
+import rule
 
 pub fn main() {
   gleeunit.main()
@@ -11,8 +12,8 @@ pub fn main() {
 // while there are lots of moving pieces.
 // 
 pub fn smoke_test() {
-  let assert Ok(rules) = code_review.run(on: "./snap_dummy")
-  use rule <- list.each(rules)
+  let assert Ok(rule_errors) = code_review.run(on: "./snap_dummy")
+  use rule: rule.RuleError <- list.each(rule_errors)
 
   rule
   |> code_review.display_rule_error
