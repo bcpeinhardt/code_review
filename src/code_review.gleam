@@ -143,17 +143,9 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
 
 fn visit_knowledge_base(kb: KnowledgeBase, rules: List(Rule)) -> List(RuleError) {
   use acc, Module(path, module) <- list.fold(kb.src_modules, [])
-  visit_module(path, rules, module)
-  |> list.append(acc)
-}
-
-fn visit_module(
-  path: String,
-  rules: List(Rule),
-  input_module: glance.Module,
-) -> List(RuleError) {
-  visit_expressions(input_module, rules)
+  visit_module(module, rules)
   |> list.map(fn(error) { RuleError(..error, path: path) })
+  |> list.append(acc)
 }
 
 // Extracts all the top level functions out of a glance module.
@@ -174,7 +166,7 @@ fn extract_constants(from input: glance.Module) -> List(glance.Constant) {
   })
 }
 
-fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
+fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
   let funcs = extract_functions(input)
   let consts = extract_constants(input)
 
