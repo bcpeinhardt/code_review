@@ -1,11 +1,10 @@
-import gleam/option
 import glance
-import rule.{type Rule, type RuleError, Rule}
+import rule.{type Rule, type RuleError}
 
-pub const rule: Rule = Rule(
-  name: "NoPanic",
-  expression_visitor: option.Some(contains_panic_in_function_expression_visitor),
-)
+pub fn rule() -> Rule {
+  rule.new("NoPanic")
+  |> rule.with_expression_visitor(contains_panic_in_function_expression_visitor)
+}
 
 pub fn contains_panic_in_function_expression_visitor(
   expr: glance.Expression,

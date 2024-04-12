@@ -102,7 +102,7 @@ pub fn main() -> Result(Nil, WhingeError) {
 // Run the linter on a project at `directory`
 pub fn run(on directory: String) -> Result(List(RuleError), WhingeError) {
   use knowledge_base <- result.try(read_project(directory))
-  let errors = visit_knowledge_base(knowledge_base, config)
+  let errors = visit_knowledge_base(knowledge_base, config())
   Ok(errors)
 }
 

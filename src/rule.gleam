@@ -8,6 +8,17 @@ pub type Rule {
   )
 }
 
+pub fn new(name: String) {
+  Rule(name: name, expression_visitor: option.None)
+}
+
+pub fn with_expression_visitor(
+  rule: Rule,
+  visitor: fn(glance.Expression) -> List(RuleError),
+) {
+  Rule(..rule, expression_visitor: option.Some(visitor))
+}
+
 // Represents an error reported by a rule.
 pub type RuleError {
   RuleError(

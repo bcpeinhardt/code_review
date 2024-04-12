@@ -1,11 +1,10 @@
-import gleam/option
 import glance
-import rule.{type Rule, type RuleError, Rule}
+import rule.{type Rule, type RuleError}
 
-pub const rule: Rule = Rule(
-  name: "NoUnnecessaryStringConcatenation",
-  expression_visitor: option.Some(unnecessary_concatenation_expression_visitor),
-)
+pub fn rule() -> Rule {
+  rule.new("NoUnnecessaryStringConcatenation")
+  |> rule.with_expression_visitor(unnecessary_concatenation_expression_visitor)
+}
 
 pub fn unnecessary_concatenation_expression_visitor(
   expr: glance.Expression,
