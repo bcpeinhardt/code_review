@@ -151,19 +151,8 @@ fn visit_knowledge_base(kb: KnowledgeBase, rules: List(Rule)) -> List(RuleError)
 fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
   let glance.Module(constants: constants, functions: functions, ..) = input
 
-  let f = fn(location_identifier, expr) {
-    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
-    |> list.map(fn(error) {
-      RuleError(..error, location_identifier: location_identifier)
-    })
-  }
-
   // Visit all constants
-  let results_after_const: List(RuleError) =
-    list.fold(constants, [], fn(const_acc, constant_with_definition) {
-      let glance.Definition(_, c) = constant_with_definition
-      do_visit_expressions(c.value, const_acc, fn(expr) { f(c.name, expr) })
-    })
+  let results_after_const: List(RuleError) = visit_constants(constants, rules)
 
   // Visit all top level functions
   let results_after_functions: List(RuleError) = {
@@ -193,6 +182,23 @@ fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
   }
 
   results_after_functions
+}
+
+fn visit_constants(
+  constants: List(glance.Definition(glance.Constant)),
+  rules: List(Rule),
+) {
+  let f = fn(location_identifier, expr) {
+    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
+    |> list.map(fn(error) {
+      RuleError(..error, location_identifier: location_identifier)
+    })
+  }
+
+  list.fold(constants, [], fn(const_acc, constant_with_definition) {
+    let glance.Definition(_, c) = constant_with_definition
+    do_visit_expressions(c.value, const_acc, fn(expr) { f(c.name, expr) })
+  })
 }
 
 fn visit_statement(
