@@ -193,10 +193,20 @@ fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError)
 
   // Visit all top level functions
   let results_after_functions: List(RuleError) = {
-    use acc0, func <- list.fold(funcs, results_after_const)
-    use acc1, stmt <- list.fold(func.body, acc0)
+    use acc0: List(RuleError), func <- list.fold(funcs, results_after_const)
 
-    let expr = case stmt {
+    let errors_for_func: List(RuleError) =
+      apply_visitor(func, rules, fn(rule) { rule.function_visitors })
+      |> list.map(fn(error) {
+        RuleError(..error, location_identifier: func.name)
+      })
+
+    use acc1: List(RuleError), stmt <- list.fold(
+      func.body,
+      list.append(errors_for_func, acc0),
+    )
+
+    let expr: glance.Expression = case stmt {
       glance.Use(_, expr) -> expr
       glance.Assignment(value: val, ..) -> val
       glance.Expression(expr) -> expr
