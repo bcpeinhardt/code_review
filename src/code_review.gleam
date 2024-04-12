@@ -202,7 +202,15 @@ fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError)
       glance.Expression(expr) -> expr
     }
 
-    do_visit_expressions(expr, acc1, fn(expr) { f(func.name, expr) })
+    list.append(
+      do_visit_expressions(expr, [], fn(expr) {
+        apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
+        |> list.map(fn(error) {
+          RuleError(..error, location_identifier: func.name)
+        })
+      }),
+      acc1,
+    )
   }
 
   results_after_functions
