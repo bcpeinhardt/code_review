@@ -3,12 +3,10 @@ import rule.{type Rule, type RuleError}
 
 pub fn rule() -> Rule {
   rule.new("NoPanic")
-  |> rule.with_expression_visitor(contains_panic_in_function_expression_visitor)
+  |> rule.with_expression_visitor(expression_visitor)
 }
 
-pub fn contains_panic_in_function_expression_visitor(
-  expr: glance.Expression,
-) -> List(RuleError) {
+pub fn expression_visitor(expr: glance.Expression) -> List(RuleError) {
   case expr {
     glance.Panic(_) -> {
       [
