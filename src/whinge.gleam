@@ -11,10 +11,10 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
-import simplifile
-import tom
 import review_config.{config}
 import rule.{type Rule, type RuleError, Rule, RuleError}
+import simplifile
+import tom
 
 pub type WhingeError {
   CouldNotGetCurrentDirectory
@@ -267,11 +267,11 @@ fn do_visit_expressions(
       }
     }
     glance.RecordUpdate(
-      module: _,
-      constructor: _,
-      record: record,
-      fields: fields,
-    ) -> {
+        module: _,
+        constructor: _,
+        record: record,
+        fields: fields,
+      ) -> {
       {
         use sub_acc, #(_, expr) <- list.fold(fields, acc)
         do_visit_expressions(expr, sub_acc, f)
@@ -290,11 +290,11 @@ fn do_visit_expressions(
       do_visit_expressions(tuple, acc, f)
     }
     glance.FnCapture(
-      label: _,
-      function: function,
-      arguments_before: arguments_before,
-      arguments_after: arguments_after,
-    ) -> {
+        label: _,
+        function: function,
+        arguments_before: arguments_before,
+        arguments_after: arguments_after,
+      ) -> {
       list.fold(
         list.append(arguments_before, arguments_after),
         acc,

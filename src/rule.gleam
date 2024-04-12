@@ -1,4 +1,5 @@
 import glance
+import gleam/option
 
 pub type Rule {
   Rule(
