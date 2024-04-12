@@ -1,5 +1,5 @@
-import gleam/option
 import glance
+import gleam/option
 import rule.{type Rule, type RuleError, Rule}
 
 pub const rule: Rule = Rule(

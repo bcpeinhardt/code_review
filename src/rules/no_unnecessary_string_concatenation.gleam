@@ -1,5 +1,5 @@
-import gleam/option
 import glance
+import gleam/option
 import rule.{type Rule, type RuleError, Rule}
 
 pub const rule: Rule = Rule(
@@ -24,10 +24,10 @@ pub fn unnecessary_concatenation_expression_visitor(
       ]
     }
     glance.BinaryOperator(
-      glance.Concatenate,
-      glance.String(_),
-      glance.String(_),
-    ) -> {
+        glance.Concatenate,
+        glance.String(_),
+        glance.String(_),
+      ) -> {
       [
         rule.error(
           message: "Unnecessary concatenation of string literals",

@@ -1,5 +1,5 @@
-import gleam/list
 import birdie
+import gleam/list
 import gleeunit
 import whinge
 
