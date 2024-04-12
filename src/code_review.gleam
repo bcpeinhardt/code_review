@@ -179,11 +179,9 @@ fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError)
   let consts = extract_constants(input)
 
   let f = fn(location_identifier, expr) {
-    list.flat_map(rules, fn(rule) {
-      list.flat_map(rule.expression_visitors, fn(visitor) { visitor(expr) })
-      |> list.map(fn(error) {
-        RuleError(..error, location_identifier: location_identifier)
-      })
+    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
+    |> list.map(fn(error) {
+      RuleError(..error, location_identifier: location_identifier)
     })
   }
 
@@ -208,6 +206,17 @@ fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError)
   }
 
   results_after_functions
+}
+
+fn apply_visitor(
+  a: a,
+  rules: List(Rule),
+  visitor_fn: fn(Rule) -> List(fn(a) -> List(RuleError)),
+) {
+  list.flat_map(rules, fn(rule) {
+    list.flat_map(visitor_fn(rule), fn(visitor) { visitor(a) })
+    |> list.map(fn(error) { RuleError(..error, rule: rule.name) })
+  })
 }
 
 fn do_visit_expressions(
