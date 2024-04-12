@@ -21,10 +21,10 @@ pub fn expression_visitor(expr: glance.Expression) -> List(RuleError) {
       ]
     }
     glance.BinaryOperator(
-        glance.Concatenate,
-        glance.String(_),
-        glance.String(_),
-      ) -> {
+      glance.Concatenate,
+      glance.String(_),
+      glance.String(_),
+    ) -> {
       [
         rule.error(
           message: "Unnecessary concatenation of string literals",
