@@ -102,7 +102,7 @@ pub fn main() -> Result(Nil, WhingeError) {
 // Run the linter on a project at `directory`
 pub fn run(on directory: String) -> Result(List(RuleError), WhingeError) {
   use knowledge_base <- result.try(read_project(directory))
-  let errors = visit_knowledge_base(knowledge_base, config)
+  let errors = visit_knowledge_base(knowledge_base, config())
   Ok(errors)
 }
 
@@ -152,24 +152,8 @@ fn visit_module(
   rules: List(Rule),
   input_module: glance.Module,
 ) -> List(RuleError) {
-  visit_expressions(input_module, fn(location_identifier, expr) {
-    list.flat_map(rules, fn(rule) {
-      case rule.expression_visitor {
-        Some(visitor) ->
-          visitor(expr)
-          |> list.map(fn(error) {
-            RuleError(
-              ..error,
-              path: path,
-              rule: rule.name,
-              location_identifier: location_identifier,
-            )
-          })
-        None -> []
-      }
-    })
-  })
-  |> list.flatten
+  visit_expressions(input_module, rules)
+  |> list.map(fn(error) { RuleError(..error, path: path) })
 }
 
 // Extracts all the top level functions out of a glance module.
@@ -190,15 +174,25 @@ fn extract_constants(from input: glance.Module) -> List(glance.Constant) {
   })
 }
 
-fn visit_expressions(
-  input: glance.Module,
-  do f: fn(String, glance.Expression) -> a,
-) -> List(a) {
+fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
   let funcs = extract_functions(input)
   let consts = extract_constants(input)
 
+  let f = fn(location_identifier, expr) {
+    list.flat_map(rules, fn(rule) {
+      list.flat_map(rule.expression_visitors, fn(visitor) { visitor(expr) })
+      |> list.map(fn(error) {
+        RuleError(
+          ..error,
+          rule: rule.name,
+          location_identifier: location_identifier,
+        )
+      })
+    })
+  }
+
   // Visit all the expressions in top level functions
-  let func_results = {
+  let func_results: List(RuleError) = {
     use func <- list.flat_map(funcs)
     use stmt <- list.flat_map(func.body)
 
@@ -209,13 +203,15 @@ fn visit_expressions(
     }
 
     do_visit_expressions(expr, [], fn(expr) { f(func.name, expr) })
+    |> list.flatten
   }
 
   // Visit all the expressions in constants
-  let const_results =
+  let const_results: List(RuleError) =
     list.flat_map(consts, fn(c) {
       do_visit_expressions(c.value, [], fn(expr) { f(c.name, expr) })
     })
+    |> list.flatten
   list.append(func_results, const_results)
 }
 

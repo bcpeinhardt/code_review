@@ -1,11 +1,21 @@
-import gleam/option
 import glance
 
 pub type Rule {
   Rule(
     name: String,
-    expression_visitor: option.Option(fn(glance.Expression) -> List(RuleError)),
+    expression_visitors: List(fn(glance.Expression) -> List(RuleError)),
   )
+}
+
+pub fn new(name: String) {
+  Rule(name: name, expression_visitors: [])
+}
+
+pub fn with_expression_visitor(
+  rule: Rule,
+  visitor: fn(glance.Expression) -> List(RuleError),
+) {
+  Rule(..rule, expression_visitors: [visitor, ..rule.expression_visitors])
 }
 
 // Represents an error reported by a rule.
