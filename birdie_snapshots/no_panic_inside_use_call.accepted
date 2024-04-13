@@ -1,10 +1,12 @@
 ---
 version: 1.1.2
-title: ./snap_dummy/src/panic_inside_use.gleam
+title: No Panic Inside Use Call
+file: ./test/code_review_test.gleam
+test_name: no_panic_inside_use_call_test
 ---
-Path: ./snap_dummy/src/panic_inside_use.gleam
+Path: mocked
 
-Location Identifier: panic_inside_use
+Location Identifier: panic_in_use_call
 Rule: no_panic
 Error: Found `panic`
 Details: This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.

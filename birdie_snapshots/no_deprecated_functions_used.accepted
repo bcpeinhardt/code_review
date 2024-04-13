@@ -1,0 +1,12 @@
+---
+version: 1.1.2
+title: No Deprecated Functions Used
+file: ./test/code_review_test.gleam
+test_name: no_deprecated_test
+---
+Path: mocked
+
+Location Identifier: main
+Rule: no_deprecated
+Error: Found usage of deprecated function
+Details: Don't use this anymore.

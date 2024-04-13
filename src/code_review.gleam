@@ -11,7 +11,7 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
-import review_config.{config}
+import review_config
 import rule.{type RuleError, RuleError}
 import simplifile
 import tom
@@ -55,7 +55,7 @@ pub fn display_rule_error(input: RuleError) -> String {
 
 // Represents information the linter has access to. We want this to include
 // as much as possible and provide ergonomic accessors for querying it.
-type KnowledgeBase {
+pub type KnowledgeBase {
   KnowledgeBase(
     // The gleam modules in the src folder
     src_modules: List(Module),
@@ -64,7 +64,7 @@ type KnowledgeBase {
   )
 }
 
-type Module {
+pub type Module {
   Module(
     // The "name" of the module is the path from the root
     // of the project to the file with the .gleam ending removed.
@@ -102,14 +102,17 @@ pub fn main() -> Result(Nil, WhingeError) {
 // Run the linter on a project at `directory`
 pub fn run(on directory: String) -> Result(List(RuleError), WhingeError) {
   use knowledge_base <- result.try(read_project(directory))
-  let rule_visitors = list.map(config(), fn(rule) { rule.module_visitor() })
+  let rule_visitors =
+    list.map(review_config.config(), fn(rule) { rule.module_visitor() })
   let errors = visit_knowledge_base(knowledge_base, rule_visitors)
   Ok(errors)
 }
 
 // Read's in all the information the linter needs 
 // from the project
-fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError) {
+pub fn read_project(
+  project_root_path: String,
+) -> Result(KnowledgeBase, WhingeError) {
   // Read and parse the gleam.toml
   use gloml_src <- result.try(
     simplifile.read(filepath.join(project_root_path, "gleam.toml"))
@@ -142,7 +145,7 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
   Ok(KnowledgeBase(src_modules: modules, gloml: gloml))
 }
 
-fn visit_knowledge_base(
+pub fn visit_knowledge_base(
   kb: KnowledgeBase,
   rules: List(rule.ModuleVisitorOperations),
 ) -> List(RuleError) {

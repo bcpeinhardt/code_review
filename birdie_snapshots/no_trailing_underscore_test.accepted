@@ -1,8 +1,10 @@
 ---
 version: 1.1.2
-title: ./snap_dummy/src/no_trailing_underscore.gleam
+title: No Trailing Underscore Test
+file: ./test/code_review_test.gleam
+test_name: no_trailing_underscore_test
 ---
-Path: ./snap_dummy/src/no_trailing_underscore.gleam
+Path: mocked
 
 Location Identifier: with_trailing_
 Rule: no_trailing_underscore

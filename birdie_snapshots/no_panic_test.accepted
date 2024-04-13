@@ -1,8 +1,10 @@
 ---
 version: 1.1.2
-title: ./snap_dummy/src/basic_panic.gleam
+title: No Panic Test
+file: ./test/code_review_test.gleam
+test_name: basic_panic_test
 ---
-Path: ./snap_dummy/src/basic_panic.gleam
+Path: mocked
 
 Location Identifier: this_code_panics
 Rule: no_panic
