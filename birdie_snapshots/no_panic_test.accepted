@@ -1,11 +1,13 @@
 ---
 version: 1.1.2
-title: ./snap_dummy/src/panic_inside_use_call.gleam
+title: No Panic Test
+file: ./test/code_review_test.gleam
+test_name: basic_panic_test
 ---
-Path: ./snap_dummy/src/panic_inside_use_call.gleam
+Path: mocked
 
-Location Identifier: panic_in_use_call
-Rule: NoPanic
+Location Identifier: this_code_panics
+Rule: no_panic
 Error: Found `panic`
 Details: This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.
 With well designed types the type system can typically be used to make these invalid states unrepresentable.

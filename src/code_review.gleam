@@ -11,8 +11,8 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
-import review_config.{config}
-import rule.{type Rule, type RuleError, Rule, RuleError}
+import review_config
+import rule.{type RuleError, RuleError}
 import simplifile
 import tom
 
@@ -55,7 +55,7 @@ pub fn display_rule_error(input: RuleError) -> String {
 
 // Represents information the linter has access to. We want this to include
 // as much as possible and provide ergonomic accessors for querying it.
-type KnowledgeBase {
+pub type KnowledgeBase {
   KnowledgeBase(
     // The gleam modules in the src folder
     src_modules: List(Module),
@@ -64,7 +64,7 @@ type KnowledgeBase {
   )
 }
 
-type Module {
+pub type Module {
   Module(
     // The "name" of the module is the path from the root
     // of the project to the file with the .gleam ending removed.
@@ -102,13 +102,17 @@ pub fn main() -> Result(Nil, WhingeError) {
 // Run the linter on a project at `directory`
 pub fn run(on directory: String) -> Result(List(RuleError), WhingeError) {
   use knowledge_base <- result.try(read_project(directory))
-  let errors = visit_knowledge_base(knowledge_base, config())
+  let rule_visitors =
+    list.map(review_config.config(), fn(rule) { rule.module_visitor() })
+  let errors = visit_knowledge_base(knowledge_base, rule_visitors)
   Ok(errors)
 }
 
 // Read's in all the information the linter needs 
 // from the project
-fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError) {
+pub fn read_project(
+  project_root_path: String,
+) -> Result(KnowledgeBase, WhingeError) {
   // Read and parse the gleam.toml
   use gloml_src <- result.try(
     simplifile.read(filepath.join(project_root_path, "gleam.toml"))
@@ -141,144 +145,117 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
   Ok(KnowledgeBase(src_modules: modules, gloml: gloml))
 }
 
-fn visit_knowledge_base(kb: KnowledgeBase, rules: List(Rule)) -> List(RuleError) {
+pub fn visit_knowledge_base(
+  kb: KnowledgeBase,
+  rules: List(rule.ModuleVisitorOperations),
+) -> List(RuleError) {
   use acc, Module(path, module) <- list.fold(kb.src_modules, [])
   visit_module(module, rules)
+  |> list.flat_map(fn(rule) { rule.get_errors() })
   |> list.map(fn(error) { RuleError(..error, path: path) })
   |> list.append(acc)
 }
 
-fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
+fn visit_module(
+  input: glance.Module,
+  rules: List(rule.ModuleVisitorOperations),
+) -> List(rule.ModuleVisitorOperations) {
   let glance.Module(constants: constants, functions: functions, ..) = input
 
   // Visit all constants
-  let results_after_const: List(RuleError) = visit_constants(constants, rules)
-  let results_after_functions: List(RuleError) =
-    visit_functions(functions, rules, results_after_const)
-
-  results_after_functions
+  rules
+  |> visit_constants(constants)
+  |> visit_functions(functions)
 }
 
 fn visit_constants(
+  rules: List(rule.ModuleVisitorOperations),
   constants: List(glance.Definition(glance.Constant)),
-  rules: List(Rule),
-) {
-  let f = fn(location_identifier, expr) {
-    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
-    |> list.map(fn(error) {
-      RuleError(..error, location_identifier: location_identifier)
-    })
-  }
-
-  list.fold(constants, [], fn(const_acc, constant_with_definition) {
-    let glance.Definition(_, c) = constant_with_definition
-    do_visit_expressions(c.value, const_acc, fn(expr) { f(c.name, expr) })
-  })
+) -> List(rule.ModuleVisitorOperations) {
+  use rules_acc, constant_with_definition <- list.fold(constants, rules)
+  let glance.Definition(_, c) = constant_with_definition
+  do_visit_expressions(rules_acc, c.value)
 }
 
 fn visit_functions(
+  rules: List(rule.ModuleVisitorOperations),
   functions: List(glance.Definition(glance.Function)),
-  rules: List(Rule),
-  acc: List(RuleError),
-) {
-  use acc0: List(RuleError), glance.Definition(_, func) <- list.fold(
-    functions,
-    acc,
-  )
+) -> List(rule.ModuleVisitorOperations) {
+  list.fold(functions, rules, visit_function)
+}
 
-  let errors_for_func: List(RuleError) =
-    apply_visitor(func, rules, fn(rule) { rule.function_visitors })
-    |> list.map(fn(error) { RuleError(..error, location_identifier: func.name) })
+fn visit_function(
+  rules_before_visit: List(rule.ModuleVisitorOperations),
+  function: glance.Definition(glance.Function),
+) -> List(rule.ModuleVisitorOperations) {
+  let rules_after_function_visit: List(rule.ModuleVisitorOperations) =
+    apply_visitor(function, rules_before_visit, fn(rule) {
+      rule.function_visitor
+    })
 
-  use acc1: List(RuleError), stmt <- list.fold(
-    func.body,
-    list.append(errors_for_func, acc0),
-  )
-
-  list.append(
-    visit_statement(stmt, rules)
-      |> list.map(fn(error) {
-      RuleError(..error, location_identifier: func.name)
-    }),
-    acc1,
-  )
+  let glance.Definition(_, func) = function
+  list.fold(func.body, rules_after_function_visit, visit_statement)
 }
 
 fn visit_statement(
+  rules: List(rule.ModuleVisitorOperations),
   statement: glance.Statement,
-  rules: List(Rule),
-) -> List(RuleError) {
-  let expr: glance.Expression = case statement {
-    glance.Use(_, expr) -> expr
-    glance.Assignment(value: val, ..) -> val
-    glance.Expression(expr) -> expr
+) -> List(rule.ModuleVisitorOperations) {
+  case statement {
+    glance.Use(_, expr) -> do_visit_expressions(rules, expr)
+    glance.Assignment(value: val, ..) -> do_visit_expressions(rules, val)
+    glance.Expression(expr) -> do_visit_expressions(rules, expr)
   }
-  do_visit_expressions(expr, [], fn(expr) {
-    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
-  })
 }
 
 fn apply_visitor(
   a: a,
-  rules: List(Rule),
-  visitor_fn: fn(Rule) -> List(fn(a) -> List(RuleError)),
-) {
-  list.flat_map(rules, fn(rule) {
-    list.flat_map(visitor_fn(rule), fn(visitor) { visitor(a) })
-    |> list.map(fn(error) { RuleError(..error, rule: rule.name) })
-  })
+  rules: List(rule.ModuleVisitorOperations),
+  get_visitor: fn(rule.ModuleVisitorOperations) ->
+    option.Option(fn(a) -> rule.ModuleVisitorOperations),
+) -> List(rule.ModuleVisitorOperations) {
+  use rule <- list.map(rules)
+  case get_visitor(rule) {
+    option.None -> rule
+    option.Some(visitor) -> visitor(a)
+  }
 }
 
 fn do_visit_expressions(
+  rules_before_visit: List(rule.ModuleVisitorOperations),
   input: glance.Expression,
-  acc: List(RuleError),
-  do f: fn(glance.Expression) -> List(RuleError),
-) -> List(RuleError) {
-  let acc: List(RuleError) = list.append(f(input), acc)
+) -> List(rule.ModuleVisitorOperations) {
+  let rules: List(rule.ModuleVisitorOperations) =
+    apply_visitor(input, rules_before_visit, fn(rule) {
+      rule.expression_visitor
+    })
+
   case input {
     glance.Todo(_)
     | glance.Panic(_)
     | glance.Int(_)
     | glance.Float(_)
     | glance.String(_)
-    | glance.Variable(_) -> acc
+    | glance.Variable(_) -> rules
 
     glance.NegateInt(expr) | glance.NegateBool(expr) ->
-      do_visit_expressions(expr, acc, f)
+      do_visit_expressions(rules, expr)
 
-    glance.Block(stmts) -> {
-      use sub_acc, stmt <- list.fold(stmts, acc)
-      case stmt {
-        // In a use statement, the "expression" should be
-        glance.Use(_, expr) -> do_visit_expressions(expr, sub_acc, f)
-        glance.Assignment(value: expr, ..) ->
-          do_visit_expressions(expr, sub_acc, f)
-        glance.Expression(expr) -> do_visit_expressions(expr, sub_acc, f)
+    glance.Block(statements) -> {
+      visit_statements(rules, statements)
+    }
+    glance.Tuple(exprs) -> list.fold(exprs, rules, do_visit_expressions)
+    glance.List(exprs, rest) -> {
+      list.fold(exprs, rules, do_visit_expressions)
+      |> fn(new_rules) {
+        case rest {
+          Some(rest_expr) -> do_visit_expressions(new_rules, rest_expr)
+          None -> new_rules
+        }
       }
     }
-    glance.Tuple(exprs) ->
-      list.fold(exprs, acc, fn(sub_acc, expr) {
-        do_visit_expressions(expr, sub_acc, f)
-      })
-    glance.List(elements, rest) -> {
-      let new_acc =
-        list.fold(elements, acc, fn(sub_acc, expr) {
-          do_visit_expressions(expr, sub_acc, f)
-        })
-      case rest {
-        Some(expr) -> do_visit_expressions(expr, new_acc, f)
-        None -> new_acc
-      }
-    }
-    glance.Fn(arguments: _, return_annotation: _, body: body) -> {
-      use sub_acc, stmt <- list.fold(body, acc)
-      case stmt {
-        // In a use statement, the "expression" should be
-        glance.Use(_, expr) -> do_visit_expressions(expr, sub_acc, f)
-        glance.Assignment(value: expr, ..) ->
-          do_visit_expressions(expr, sub_acc, f)
-        glance.Expression(expr) -> do_visit_expressions(expr, sub_acc, f)
-      }
+    glance.Fn(arguments: _, return_annotation: _, body: statements) -> {
+      visit_statements(rules, statements)
     }
     glance.RecordUpdate(
         module: _,
@@ -286,22 +263,21 @@ fn do_visit_expressions(
         record: record,
         fields: fields,
       ) -> {
-      {
-        use sub_acc, #(_, expr) <- list.fold(fields, acc)
-        do_visit_expressions(expr, sub_acc, f)
-      }
-      |> do_visit_expressions(record, _, f)
+      let new_rules = do_visit_expressions(rules, record)
+
+      use acc_rules, #(_, expr) <- list.fold(fields, new_rules)
+      do_visit_expressions(acc_rules, expr)
     }
     glance.FieldAccess(container: container, label: _) ->
-      do_visit_expressions(container, acc, f)
+      do_visit_expressions(rules, container)
     glance.Call(function, arguments) -> {
-      list.fold(arguments, acc, fn(sub_acc, arg) {
-        do_visit_expressions(arg.item, sub_acc, f)
-      })
-      |> do_visit_expressions(function, _, f)
+      let new_rules = do_visit_expressions(rules, function)
+
+      use acc_rules, arg <- list.fold(arguments, new_rules)
+      do_visit_expressions(acc_rules, arg.item)
     }
-    glance.TupleIndex(tuple, index: _) -> {
-      do_visit_expressions(tuple, acc, f)
+    glance.TupleIndex(expr, index: _) -> {
+      do_visit_expressions(rules, expr)
     }
     glance.FnCapture(
         label: _,
@@ -311,32 +287,42 @@ fn do_visit_expressions(
       ) -> {
       list.fold(
         list.append(arguments_before, arguments_after),
-        acc,
-        fn(sub_acc, arg) { do_visit_expressions(arg.item, sub_acc, f) },
+        rules,
+        fn(acc_rules, arg) { do_visit_expressions(acc_rules, arg.item) },
       )
-      |> do_visit_expressions(function, _, f)
+      |> do_visit_expressions(function)
     }
     glance.BitString(segments) -> {
-      use sub_acc, #(expr, _) <- list.fold(segments, acc)
-      do_visit_expressions(expr, sub_acc, f)
+      use acc_rules, #(expr, _) <- list.fold(segments, rules)
+      do_visit_expressions(acc_rules, expr)
     }
     glance.Case(subjects, clauses) -> {
-      let new_acc =
-        list.fold(subjects, acc, fn(sub_acc, expr) {
-          do_visit_expressions(expr, sub_acc, f)
-        })
-      list.fold(clauses, new_acc, fn(sub_acc, c) {
-        let glance.Clause(_, guard, body) = c
-        let sub_acc_2 = do_visit_expressions(body, sub_acc, f)
-        case guard {
-          Some(expr) -> do_visit_expressions(expr, sub_acc_2, f)
-          None -> sub_acc_2
-        }
-      })
+      let new_rules = list.fold(subjects, rules, do_visit_expressions)
+
+      use acc_rules, c <- list.fold(clauses, new_rules)
+      let glance.Clause(_, guard, body) = c
+      let acc_rules_2 = do_visit_expressions(acc_rules, body)
+      case guard {
+        Some(expr) -> do_visit_expressions(rules, expr)
+        None -> acc_rules_2
+      }
     }
     glance.BinaryOperator(name: _, left: left, right: right) -> {
-      do_visit_expressions(left, acc, f)
-      |> do_visit_expressions(right, _, f)
+      rules
+      |> do_visit_expressions(left)
+      |> do_visit_expressions(right)
     }
+  }
+}
+
+fn visit_statements(
+  initial_rules: List(rule.ModuleVisitorOperations),
+  statements: List(glance.Statement),
+) -> List(rule.ModuleVisitorOperations) {
+  use rules, stmt <- list.fold(statements, initial_rules)
+  case stmt {
+    glance.Use(_, expr) -> do_visit_expressions(rules, expr)
+    glance.Assignment(value: expr, ..) -> do_visit_expressions(rules, expr)
+    glance.Expression(expr) -> do_visit_expressions(rules, expr)
   }
 }

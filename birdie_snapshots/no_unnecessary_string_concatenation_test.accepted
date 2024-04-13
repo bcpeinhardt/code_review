@@ -1,11 +1,13 @@
 ---
 version: 1.1.2
-title: ./snap_dummy/src/string_concatenation.gleam
+title: No Unnecessary String Concatenation Test
+file: ./test/code_review_test.gleam
+test_name: no_unnecessary_string_concatenation_test
 ---
-Path: ./snap_dummy/src/string_concatenation.gleam
+Path: mocked
 
 Location Identifier: string_concatenation
-Rule: NoUnnecessaryStringConcatenation
+Rule: no_unnecessary_string_concatenation
 Error: Unnecessary concatenation of string literals
 Details: Instead of concatenating these two string literals, they can be written as a single one.
 For instance, instead of "a" <> "b", you could write that as "ab".
