@@ -1,4 +1,4 @@
-import rule.{type Rule, Rule}
+import rule.{type Rule}
 import rules/no_panic
 import rules/no_trailing_underscore
 import rules/no_unnecessary_string_concatenation

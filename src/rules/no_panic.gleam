@@ -2,8 +2,9 @@ import glance
 import rule.{type Rule, type RuleError}
 
 pub fn rule() -> Rule {
-  rule.new("NoPanic")
-  |> rule.with_expression_visitor(expression_visitor)
+  rule.new("NoPanic", Nil)
+  |> rule.with_simple_expression_visitor(expression_visitor)
+  |> rule.to_rule
 }
 
 pub fn expression_visitor(expr: glance.Expression) -> List(RuleError) {

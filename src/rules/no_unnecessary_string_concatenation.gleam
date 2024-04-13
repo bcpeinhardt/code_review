@@ -2,8 +2,9 @@ import glance
 import rule.{type Rule, type RuleError}
 
 pub fn rule() -> Rule {
-  rule.new("NoUnnecessaryStringConcatenation")
-  |> rule.with_expression_visitor(expression_visitor)
+  rule.new("NoUnnecessaryStringConcatenation", Nil)
+  |> rule.with_simple_expression_visitor(expression_visitor)
+  |> rule.to_rule
 }
 
 pub fn expression_visitor(expr: glance.Expression) -> List(RuleError) {
