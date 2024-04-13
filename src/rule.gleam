@@ -2,6 +2,32 @@ import glance
 import gleam/list
 import gleam/option
 
+pub type RuleSchema(context) {
+  RuleSchema(
+    name: String,
+    initial_context: context,
+    function_visitor: option.Option(
+      fn(glance.Function, context) -> List(RuleError),
+    ),
+    expression_visitor: option.Option(
+      fn(glance.Expression, context) -> List(RuleError),
+    ),
+  )
+}
+
+pub fn to_rule(schema: RuleSchema(context)) -> Rule {
+  Rule(
+    name: schema.name,
+    // Using initial_context is temporary
+    function_visitor: option.map(schema.function_visitor, fn(visitor) {
+      fn(node) { visitor(node, schema.initial_context) }
+    }),
+    expression_visitor: option.map(schema.expression_visitor, fn(visitor) {
+      fn(node) { visitor(node, schema.initial_context) }
+    }),
+  )
+}
+
 pub type Rule {
   Rule(
     name: String,
