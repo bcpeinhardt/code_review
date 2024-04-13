@@ -1,12 +1,16 @@
+//// This rule checks the code for any panic statements. 
+
 import glance
-import rule.{type Rule, type RuleError}
+import rule.{type Rule, type RuleViolation, Rule}
 
-pub fn rule() -> Rule {
-  rule.new("NoPanic")
-  |> rule.with_expression_visitor(expression_visitor)
-}
+pub const rule = Rule(
+  name: "NoPanic",
+  expression_visitors: [check_expressions_for_panics],
+)
 
-pub fn expression_visitor(expr: glance.Expression) -> List(RuleError) {
+pub fn check_expressions_for_panics(
+  expr: glance.Expression,
+) -> List(RuleViolation) {
   case expr {
     glance.Panic(_) -> {
       [

@@ -1,12 +1,19 @@
+//// This rule checks the code for unnecessary string literal concatenation, 
+//// like "a" <> "b" instead of just "ab".
+
 import glance
-import rule.{type Rule, type RuleError}
+import rule.{type Rule, type RuleViolation, Rule}
 
-pub fn rule() -> Rule {
-  rule.new("NoUnnecessaryStringConcatenation")
-  |> rule.with_expression_visitor(expression_visitor)
-}
+pub const rule = Rule(
+  name: "NoUnnecessaryStringConcatenation",
+  expression_visitors: [
+    check_binary_ops_for_unnecessary_string_literal_concatenation,
+  ],
+)
 
-pub fn expression_visitor(expr: glance.Expression) -> List(RuleError) {
+pub fn check_binary_ops_for_unnecessary_string_literal_concatenation(
+  expr: glance.Expression,
+) -> List(RuleViolation) {
   case expr {
     glance.BinaryOperator(glance.Concatenate, glance.String(""), _)
     | glance.BinaryOperator(glance.Concatenate, _, glance.String("")) -> {

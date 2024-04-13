@@ -15,6 +15,6 @@ pub fn smoke_test() {
   use rule <- list.each(rules)
 
   rule
-  |> code_review.display_rule_error
+  |> code_review.display_rule_violation
   |> birdie.snap(title: rule.path)
 }
