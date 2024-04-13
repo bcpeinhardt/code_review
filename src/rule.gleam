@@ -25,6 +25,7 @@ pub fn with_function_visitor(
   Rule(
     ..rule,
     function_visitor: option.Some(combine_visitors(
+      rule.name,
       visitor,
       rule.function_visitor,
     )),
@@ -38,6 +39,7 @@ pub fn with_expression_visitor(
   Rule(
     ..rule,
     expression_visitor: option.Some(combine_visitors(
+      rule.name,
       visitor,
       rule.expression_visitor,
     )),
@@ -45,14 +47,16 @@ pub fn with_expression_visitor(
 }
 
 fn combine_visitors(
+  rule_name: String,
   new_visitor: fn(a) -> List(RuleError),
   maybe_previous_visitor: option.Option(fn(a) -> List(RuleError)),
 ) {
   case maybe_previous_visitor {
-    option.None -> new_visitor
+    option.None -> set_rule_name_on_errors(rule_name, new_visitor)
     option.Some(previous_visitor) -> fn(a) {
       let errors_after_first_visit = previous_visitor(a)
-      let errors_after_second_visit = new_visitor(a)
+      let errors_after_second_visit =
+        set_rule_name_on_errors(rule_name, new_visitor)(a)
 
       list.append(errors_after_first_visit, errors_after_second_visit)
     }

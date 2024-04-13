@@ -226,9 +226,7 @@ fn apply_visitor(
   list.flat_map(rules, fn(rule) {
     case get_visitor(rule) {
       option.None -> []
-      option.Some(visitor) ->
-        visitor(a)
-        |> list.map(fn(error) { RuleError(..error, rule: rule.name) })
+      option.Some(visitor) -> visitor(a)
     }
   })
 }
