@@ -12,7 +12,7 @@ import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
 import review_config.{config}
-import rule.{type Rule, type RuleError, ModuleVisitorOperations, RuleError}
+import rule.{type RuleError, RuleError}
 import simplifile
 import tom
 

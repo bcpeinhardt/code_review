@@ -131,10 +131,11 @@ pub type RuleError {
 pub fn error(
   message message: String,
   details details: List(String),
+  location location: String,
 ) -> RuleError {
   RuleError(
     path: "",
-    location_identifier: "",
+    location_identifier: location,
     rule: "",
     message: message,
     details: details,

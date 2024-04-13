@@ -14,9 +14,11 @@ pub fn function_visitor(
   let glance.Definition(_, func) = function
   case string.ends_with(func.name, "_") {
     True -> [
-      rule.error(message: "Trailing underscore in function name", details: [
-        "We don't like no trailing underscores.",
-      ]),
+      rule.error(
+        message: "Trailing underscore in function name",
+        details: ["We don't like no trailing underscores."],
+        location: func.name,
+      ),
     ]
     False -> []
   }
