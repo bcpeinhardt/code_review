@@ -1,7 +1,7 @@
 import birdie
+import code_review
 import gleam/list
 import gleeunit
-import code_review
 
 pub fn main() {
   gleeunit.main()
