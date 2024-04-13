@@ -3,7 +3,7 @@ import gleam/string
 import rule.{type Rule, type RuleError}
 
 pub fn rule() -> Rule {
-  rule.new("NoTrailingUnderscore", Nil)
+  rule.new("no_trailing_underscore", Nil)
   |> rule.with_simple_function_visitor(function_visitor)
   |> rule.to_rule
 }

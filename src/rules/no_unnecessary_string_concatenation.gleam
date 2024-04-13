@@ -2,7 +2,7 @@ import glance
 import rule.{type Rule, type RuleError}
 
 pub fn rule() -> Rule {
-  rule.new("NoUnnecessaryStringConcatenation", initial_context)
+  rule.new("no_unnecessary_string_concatenation", initial_context)
   |> rule.with_function_visitor(function_visitor)
   |> rule.with_expression_visitor(expression_visitor)
   |> rule.to_rule

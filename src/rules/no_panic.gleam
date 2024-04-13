@@ -2,7 +2,7 @@ import glance
 import rule.{type Rule, type RuleError}
 
 pub fn rule() -> Rule {
-  rule.new("NoPanic", initial_context)
+  rule.new("no_panic", initial_context)
   |> rule.with_function_visitor(function_visitor)
   |> rule.with_expression_visitor(expression_visitor)
   |> rule.to_rule
