@@ -143,84 +143,98 @@ fn read_project(project_root_path: String) -> Result(KnowledgeBase, WhingeError)
 
 fn visit_knowledge_base(kb: KnowledgeBase, rules: List(Rule)) -> List(RuleError) {
   use acc, Module(path, module) <- list.fold(kb.src_modules, [])
-  visit_module(path, rules, module)
+  visit_module(module, rules)
+  |> list.map(fn(error) { RuleError(..error, path: path) })
   |> list.append(acc)
 }
 
-fn visit_module(
-  path: String,
+fn visit_module(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
+  let glance.Module(constants: constants, functions: functions, ..) = input
+
+  // Visit all constants
+  let results_after_const: List(RuleError) = visit_constants(constants, rules)
+  let results_after_functions: List(RuleError) =
+    visit_functions(functions, rules, results_after_const)
+
+  results_after_functions
+}
+
+fn visit_constants(
+  constants: List(glance.Definition(glance.Constant)),
   rules: List(Rule),
-  input_module: glance.Module,
-) -> List(RuleError) {
-  visit_expressions(input_module, rules)
-  |> list.map(fn(error) { RuleError(..error, path: path) })
-}
-
-// Extracts all the top level functions out of a glance module.
-fn extract_functions(from input: glance.Module) -> List(glance.Function) {
-  let glance.Module(functions: function_defs, ..) = input
-  let _functions =
-    list.map(function_defs, fn(def) {
-      let glance.Definition(_, func) = def
-      func
+) {
+  let f = fn(location_identifier, expr) {
+    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
+    |> list.map(fn(error) {
+      RuleError(..error, location_identifier: location_identifier)
     })
-}
+  }
 
-fn extract_constants(from input: glance.Module) -> List(glance.Constant) {
-  let glance.Module(constants: consts, ..) = input
-  list.map(consts, fn(const_) {
-    let glance.Definition(_, c) = const_
-    c
+  list.fold(constants, [], fn(const_acc, constant_with_definition) {
+    let glance.Definition(_, c) = constant_with_definition
+    do_visit_expressions(c.value, const_acc, fn(expr) { f(c.name, expr) })
   })
 }
 
-fn visit_expressions(input: glance.Module, rules: List(Rule)) -> List(RuleError) {
-  let funcs = extract_functions(input)
-  let consts = extract_constants(input)
+fn visit_functions(
+  functions: List(glance.Definition(glance.Function)),
+  rules: List(Rule),
+  acc: List(RuleError),
+) {
+  use acc0: List(RuleError), glance.Definition(_, func) <- list.fold(
+    functions,
+    acc,
+  )
 
-  let f = fn(location_identifier, expr) {
-    list.flat_map(rules, fn(rule) {
-      list.flat_map(rule.expression_visitors, fn(visitor) { visitor(expr) })
+  let errors_for_func: List(RuleError) =
+    apply_visitor(func, rules, fn(rule) { rule.function_visitors })
+    |> list.map(fn(error) { RuleError(..error, location_identifier: func.name) })
+
+  use acc1: List(RuleError), stmt <- list.fold(
+    func.body,
+    list.append(errors_for_func, acc0),
+  )
+
+  list.append(
+    visit_statement(stmt, rules)
       |> list.map(fn(error) {
-        RuleError(
-          ..error,
-          rule: rule.name,
-          location_identifier: location_identifier,
-        )
-      })
-    })
+      RuleError(..error, location_identifier: func.name)
+    }),
+    acc1,
+  )
+}
+
+fn visit_statement(
+  statement: glance.Statement,
+  rules: List(Rule),
+) -> List(RuleError) {
+  let expr: glance.Expression = case statement {
+    glance.Use(_, expr) -> expr
+    glance.Assignment(value: val, ..) -> val
+    glance.Expression(expr) -> expr
   }
+  do_visit_expressions(expr, [], fn(expr) {
+    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
+  })
+}
 
-  // Visit all the expressions in top level functions
-  let func_results: List(RuleError) = {
-    use func <- list.flat_map(funcs)
-    use stmt <- list.flat_map(func.body)
-
-    let expr = case stmt {
-      glance.Use(_, expr) -> expr
-      glance.Assignment(value: val, ..) -> val
-      glance.Expression(expr) -> expr
-    }
-
-    do_visit_expressions(expr, [], fn(expr) { f(func.name, expr) })
-    |> list.flatten
-  }
-
-  // Visit all the expressions in constants
-  let const_results: List(RuleError) =
-    list.flat_map(consts, fn(c) {
-      do_visit_expressions(c.value, [], fn(expr) { f(c.name, expr) })
-    })
-    |> list.flatten
-  list.append(func_results, const_results)
+fn apply_visitor(
+  a: a,
+  rules: List(Rule),
+  visitor_fn: fn(Rule) -> List(fn(a) -> List(RuleError)),
+) {
+  list.flat_map(rules, fn(rule) {
+    list.flat_map(visitor_fn(rule), fn(visitor) { visitor(a) })
+    |> list.map(fn(error) { RuleError(..error, rule: rule.name) })
+  })
 }
 
 fn do_visit_expressions(
   input: glance.Expression,
-  acc: List(a),
-  do f: fn(glance.Expression) -> a,
-) -> List(a) {
-  let acc = [f(input), ..acc]
+  acc: List(RuleError),
+  do f: fn(glance.Expression) -> List(RuleError),
+) -> List(RuleError) {
+  let acc: List(RuleError) = list.append(f(input), acc)
   case input {
     glance.Todo(_)
     | glance.Panic(_)

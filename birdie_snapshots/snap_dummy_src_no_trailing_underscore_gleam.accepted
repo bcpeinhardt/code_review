@@ -1,0 +1,10 @@
+---
+version: 1.1.2
+title: ./snap_dummy/src/no_trailing_underscore.gleam
+---
+Path: ./snap_dummy/src/no_trailing_underscore.gleam
+
+Location Identifier: with_trailing_
+Rule: NoTrailingUnderscore
+Error: Trailing underscore in function name
+Details: We don't like no trailing underscores.
