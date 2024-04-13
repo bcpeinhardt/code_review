@@ -164,7 +164,7 @@ fn visit_constants(
   rules: List(Rule),
 ) {
   let f = fn(location_identifier, expr) {
-    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
+    apply_visitor(expr, rules, fn(rule) { rule.expression_visitor })
     |> list.map(fn(error) {
       RuleError(..error, location_identifier: location_identifier)
     })
@@ -187,7 +187,7 @@ fn visit_functions(
   )
 
   let errors_for_func: List(RuleError) =
-    apply_visitor(func, rules, fn(rule) { rule.function_visitors })
+    apply_visitor(func, rules, fn(rule) { rule.function_visitor })
     |> list.map(fn(error) { RuleError(..error, location_identifier: func.name) })
 
   use acc1: List(RuleError), stmt <- list.fold(
@@ -214,18 +214,22 @@ fn visit_statement(
     glance.Expression(expr) -> expr
   }
   do_visit_expressions(expr, [], fn(expr) {
-    apply_visitor(expr, rules, fn(rule) { rule.expression_visitors })
+    apply_visitor(expr, rules, fn(rule) { rule.expression_visitor })
   })
 }
 
 fn apply_visitor(
   a: a,
   rules: List(Rule),
-  visitor_fn: fn(Rule) -> List(fn(a) -> List(RuleError)),
+  get_visitor: fn(Rule) -> option.Option(fn(a) -> List(RuleError)),
 ) {
   list.flat_map(rules, fn(rule) {
-    list.flat_map(visitor_fn(rule), fn(visitor) { visitor(a) })
-    |> list.map(fn(error) { RuleError(..error, rule: rule.name) })
+    case get_visitor(rule) {
+      option.None -> []
+      option.Some(visitor) ->
+        visitor(a)
+        |> list.map(fn(error) { RuleError(..error, rule: rule.name) })
+    }
   })
 }
 

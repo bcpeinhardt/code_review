@@ -5,13 +5,17 @@ import gleam/option
 pub type Rule {
   Rule(
     name: String,
-    function_visitors: List(fn(glance.Function) -> List(RuleError)),
-    expression_visitors: List(fn(glance.Expression) -> List(RuleError)),
+    function_visitor: option.Option(fn(glance.Function) -> List(RuleError)),
+    expression_visitor: option.Option(fn(glance.Expression) -> List(RuleError)),
   )
 }
 
 pub fn new(name: String) {
-  Rule(name: name, function_visitors: [], expression_visitors: [])
+  Rule(
+    name: name,
+    function_visitor: option.None,
+    expression_visitor: option.None,
+  )
 }
 
 pub fn with_function_visitor(
@@ -20,10 +24,10 @@ pub fn with_function_visitor(
 ) {
   Rule(
     ..rule,
-    function_visitors: [
-      set_rule_name_on_errors(rule.name, visitor),
-      ..rule.function_visitors
-    ],
+    function_visitor: option.Some(combine_visitors(
+      visitor,
+      rule.function_visitor,
+    )),
   )
 }
 
@@ -33,10 +37,10 @@ pub fn with_expression_visitor(
 ) {
   Rule(
     ..rule,
-    expression_visitors: [
-      set_rule_name_on_errors(rule.name, visitor),
-      ..rule.expression_visitors
-    ],
+    expression_visitor: option.Some(combine_visitors(
+      visitor,
+      rule.expression_visitor,
+    )),
   )
 }
 
