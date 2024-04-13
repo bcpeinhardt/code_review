@@ -1,5 +1,6 @@
 import glance
 import gleam/list
+import gleam/option
 
 pub type Rule {
   Rule(
@@ -39,13 +40,17 @@ pub fn with_expression_visitor(
   )
 }
 
-fn combine_visitors(new_visitor: fn(glance.Expression) -> List(RuleError), maybe_previous_visitor: option.Option(fn(glance.Expression) -> List(RuleError))) {
+fn combine_visitors(
+  new_visitor: fn(a) -> List(RuleError),
+  maybe_previous_visitor: option.Option(fn(a) -> List(RuleError)),
+) {
   case maybe_previous_visitor {
-    option.None-> new_visitor
-    option.Some(previous_visitor)-> fn(a, context) {
-       let #( errors_after_first_visit, context_after_first_visit ) = previous_visitor(a, context)
-       let #( errors_after_second_visit, context_after_second_visit ) = new_visitor(a, context_after_first_visit)
-       ( List.append errors_after_first_visit errors_after_second_visit, context_after_second_visit )
+    option.None -> new_visitor
+    option.Some(previous_visitor) -> fn(a) {
+      let errors_after_first_visit = previous_visitor(a)
+      let errors_after_second_visit = new_visitor(a)
+
+      list.append(errors_after_first_visit, errors_after_second_visit)
     }
   }
 }
