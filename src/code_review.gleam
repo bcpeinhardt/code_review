@@ -1,6 +1,6 @@
 //// A linter for Gleam, written in Gleam. Staring with a very basic prototype
-//// setup: read in the gleam files, iterate over them searching for commo
-//// patterns based on the glance module that get's parsed, and produce messages
+//// setup: read in the gleam files, iterate over them searching for common
+//// patterns based on the glance module that gets parsed, and produce messages
 //// pointing out the issue.
 
 import code_review/internal/project.{type Project}
