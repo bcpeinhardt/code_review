@@ -1,7 +1,7 @@
+import code_review/rule.{type Rule}
 import glance
 import gleam/list
 import gleam/set.{type Set}
-import rule.{type Rule, type RuleError}
 
 pub fn rule() -> Rule {
   rule.new("no_deprecated", initial_context())
@@ -42,7 +42,7 @@ fn function_visitor(
 fn expression_visitor(
   expr: glance.Expression,
   context: Context,
-) -> #(List(RuleError), Context) {
+) -> #(List(rule.Error), Context) {
   case expr {
     glance.Variable(name) ->
       case set.contains(context.deprecated_functions, name) {
@@ -51,7 +51,7 @@ fn expression_visitor(
             rule.error(
               message: "Found usage of deprecated function",
               details: ["Don't use this anymore."],
-              location: context.current_location,
+              at: context.current_location,
             ),
           ],
           context,

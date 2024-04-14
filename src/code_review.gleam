@@ -1,194 +1,96 @@
-//// A linter for Gleam, written in Gleam. Staring with a very basic prototype setup:
-//// Read in the gleam files, iterate over them searching for common patterns
-//// based on the glance module that get's parsed, and produce messages pointing out 
-//// the issue.
+//// A linter for Gleam, written in Gleam. Staring with a very basic prototype
+//// setup: read in the gleam files, iterate over them searching for common
+//// patterns based on the glance module that gets parsed, and produce messages
+//// pointing out the issue.
 
-import filepath
+import code_review/internal/project.{type Project}
+import code_review/rule.{type Rule}
+import code_review/rules/no_deprecated
+import code_review/rules/no_panic
+import code_review/rules/no_trailing_underscore
+import code_review/rules/no_unnecessary_string_concatenation
 import glance
-import gleam/dict.{type Dict}
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
-import gleam/string
-import review_config
-import rule.{type RuleError, RuleError}
-import simplifile
-import tom
 
-pub type WhingeError {
-  CouldNotGetCurrentDirectory
-  CouldNotGetSourceFiles
-  CouldNotReadAllSourceFiles
-  CouldNotParseAllModules
-  CouldNotReadGleamToml
-  CouldNotParseGleamToml
-}
+// RUNNING THE LINTER ----------------------------------------------------------
 
-fn whinge_error_to_error_message(input: WhingeError) -> String {
-  case input {
-    CouldNotGetCurrentDirectory -> "Error: Could not get current directory"
-    CouldNotGetSourceFiles -> "Error: Could not get source files"
-    CouldNotReadAllSourceFiles -> "Error: Could not read all source files"
-    CouldNotParseAllModules -> "Error: Could not parse all modules"
-    CouldNotReadGleamToml -> "Error: Could not read gleam.toml"
-    CouldNotParseGleamToml -> "Error: Could not parse gleam.toml"
-  }
-}
-
-// Responsible for printing a rule error to the console
-// TODO: Just an initial repr for testing, someone good at making things pretty 
-// will need to update this
-pub fn display_rule_error(input: RuleError) -> String {
-  "Path: "
-  <> input.path
-  <> "\n"
-  <> "\nLocation Identifier: "
-  <> input.location_identifier
-  <> "\nRule: "
-  <> input.rule
-  <> "\nError: "
-  <> input.message
-  <> "\nDetails: "
-  <> string.join(input.details, with: "\n")
-}
-
-// Represents information the linter has access to. We want this to include
-// as much as possible and provide ergonomic accessors for querying it.
-pub type KnowledgeBase {
-  KnowledgeBase(
-    // The gleam modules in the src folder
-    src_modules: List(Module),
-    // The gleam.toml
-    gloml: Dict(String, tom.Toml),
-  )
-}
-
-pub type Module {
-  Module(
-    // The "name" of the module is the path from the root
-    // of the project to the file with the .gleam ending removed.
-    //
-    name: String,
-    // The parsed source code in the module
-    //
-    src: glance.Module,
-  )
-}
-
-pub fn main() -> Result(Nil, WhingeError) {
-  // Get the current directory
-  use curr_dir <- result.map(
-    simplifile.current_directory()
-    |> result.replace_error(CouldNotGetCurrentDirectory),
-  )
-
-  // Run the linter
-  case run(curr_dir) {
-    Ok(errors) ->
-      list.each(errors, fn(e) {
-        e
-        |> display_rule_error
-        |> io.println
+pub fn main() -> Nil {
+  case run(on: project.root()) {
+    Ok(rule_errors) ->
+      list.each(rule_errors, fn(rule_error) {
+        rule.pretty_print_error(rule_error)
+        |> io.println_error
       })
-    Error(e) ->
-      io.print_error(
-        e
-        |> whinge_error_to_error_message,
-      )
+
+    Error(project_error) ->
+      project.explain_error(project_error)
+      |> io.println_error
   }
 }
 
-// Run the linter on a project at `directory`
-pub fn run(on directory: String) -> Result(List(RuleError), WhingeError) {
-  use knowledge_base <- result.try(read_project(directory))
-  let rule_visitors =
-    list.map(review_config.config(), fn(rule) { rule.module_visitor() })
-  let errors = visit_knowledge_base(knowledge_base, rule_visitors)
-  Ok(errors)
+/// Run the linter for a project at the given path.
+///
+fn run(on project_root: String) -> Result(List(rule.Error), project.Error) {
+  use knowledge_base <- result.try(project.read(project_root))
+  let rules = [
+    no_panic.rule(),
+    no_unnecessary_string_concatenation.rule(),
+    no_trailing_underscore.rule(),
+    no_deprecated.rule(),
+  ]
+
+  Ok(visit(knowledge_base, rules))
 }
 
-// Read's in all the information the linter needs 
-// from the project
-pub fn read_project(
-  project_root_path: String,
-) -> Result(KnowledgeBase, WhingeError) {
-  // Read and parse the gleam.toml
-  use gloml_src <- result.try(
-    simplifile.read(filepath.join(project_root_path, "gleam.toml"))
-    |> result.replace_error(CouldNotReadGleamToml),
-  )
-  use gloml <- result.try(
-    tom.parse(gloml_src)
-    |> result.replace_error(CouldNotParseGleamToml),
-  )
-  // Read in the source modules
-  use src_files <- result.try(
-    simplifile.get_files(filepath.join(project_root_path, "src"))
-    |> result.replace_error(CouldNotGetSourceFiles),
-  )
+/// TODO: once Gleam goes v1.1 this could be marked as internal, I don't think
+///       we should expose it in the public API.
+///       I feel the `code_review` module should only publicly expose the `main`
+///       function that acts as the CLI entry point.
+pub fn visit(project: Project, rules: List(Rule)) -> List(rule.Error) {
+  let rule_visitors = list.map(rules, rule.module_visitor)
 
-  use modules <- result.try(
-    list.try_map(src_files, fn(file) {
-      use content <- result.try(
-        simplifile.read(file)
-        |> result.replace_error(CouldNotReadAllSourceFiles),
-      )
-      use module <- result.try(
-        glance.module(content)
-        |> result.replace_error(CouldNotParseAllModules),
-      )
-      Ok(Module(file, module))
-    }),
-  )
-
-  Ok(KnowledgeBase(src_modules: modules, gloml: gloml))
-}
-
-pub fn visit_knowledge_base(
-  kb: KnowledgeBase,
-  rules: List(rule.ModuleVisitorOperations),
-) -> List(RuleError) {
-  use acc, Module(path, module) <- list.fold(kb.src_modules, [])
-  visit_module(module, rules)
+  use acc, project.Module(path, module) <- list.fold(project.src_modules, [])
+  visit_module(module, rule_visitors)
   |> list.flat_map(fn(rule) { rule.get_errors() })
-  |> list.map(fn(error) { RuleError(..error, path: path) })
+  |> list.map(rule.set_error_path(_, path))
   |> list.append(acc)
 }
 
 fn visit_module(
-  input: glance.Module,
-  rules: List(rule.ModuleVisitorOperations),
-) -> List(rule.ModuleVisitorOperations) {
-  let glance.Module(constants: constants, functions: functions, ..) = input
+  module: glance.Module,
+  rules: List(rule.ModuleVisitor),
+) -> List(rule.ModuleVisitor) {
+  let glance.Module(constants: constants, functions: functions, ..) = module
 
-  // Visit all constants
   rules
   |> visit_constants(constants)
   |> visit_functions(functions)
 }
 
 fn visit_constants(
-  rules: List(rule.ModuleVisitorOperations),
+  rules: List(rule.ModuleVisitor),
   constants: List(glance.Definition(glance.Constant)),
-) -> List(rule.ModuleVisitorOperations) {
+) -> List(rule.ModuleVisitor) {
   use rules_acc, constant_with_definition <- list.fold(constants, rules)
   let glance.Definition(_, c) = constant_with_definition
   do_visit_expressions(rules_acc, c.value)
 }
 
 fn visit_functions(
-  rules: List(rule.ModuleVisitorOperations),
+  rules: List(rule.ModuleVisitor),
   functions: List(glance.Definition(glance.Function)),
-) -> List(rule.ModuleVisitorOperations) {
+) -> List(rule.ModuleVisitor) {
   list.fold(functions, rules, visit_function)
 }
 
 fn visit_function(
-  rules_before_visit: List(rule.ModuleVisitorOperations),
+  rules_before_visit: List(rule.ModuleVisitor),
   function: glance.Definition(glance.Function),
-) -> List(rule.ModuleVisitorOperations) {
-  let rules_after_function_visit: List(rule.ModuleVisitorOperations) =
+) -> List(rule.ModuleVisitor) {
+  let rules_after_function_visit: List(rule.ModuleVisitor) =
     apply_visitor(function, rules_before_visit, fn(rule) {
       rule.function_visitor
     })
@@ -198,9 +100,9 @@ fn visit_function(
 }
 
 fn visit_statement(
-  rules: List(rule.ModuleVisitorOperations),
+  rules: List(rule.ModuleVisitor),
   statement: glance.Statement,
-) -> List(rule.ModuleVisitorOperations) {
+) -> List(rule.ModuleVisitor) {
   case statement {
     glance.Use(_, expr) -> do_visit_expressions(rules, expr)
     glance.Assignment(value: val, ..) -> do_visit_expressions(rules, val)
@@ -210,10 +112,10 @@ fn visit_statement(
 
 fn apply_visitor(
   a: a,
-  rules: List(rule.ModuleVisitorOperations),
-  get_visitor: fn(rule.ModuleVisitorOperations) ->
-    option.Option(fn(a) -> rule.ModuleVisitorOperations),
-) -> List(rule.ModuleVisitorOperations) {
+  rules: List(rule.ModuleVisitor),
+  get_visitor: fn(rule.ModuleVisitor) ->
+    option.Option(fn(a) -> rule.ModuleVisitor),
+) -> List(rule.ModuleVisitor) {
   use rule <- list.map(rules)
   case get_visitor(rule) {
     option.None -> rule
@@ -222,10 +124,10 @@ fn apply_visitor(
 }
 
 fn do_visit_expressions(
-  rules_before_visit: List(rule.ModuleVisitorOperations),
+  rules_before_visit: List(rule.ModuleVisitor),
   input: glance.Expression,
-) -> List(rule.ModuleVisitorOperations) {
-  let rules: List(rule.ModuleVisitorOperations) =
+) -> List(rule.ModuleVisitor) {
+  let rules: List(rule.ModuleVisitor) =
     apply_visitor(input, rules_before_visit, fn(rule) {
       rule.expression_visitor
     })
@@ -316,9 +218,9 @@ fn do_visit_expressions(
 }
 
 fn visit_statements(
-  initial_rules: List(rule.ModuleVisitorOperations),
+  initial_rules: List(rule.ModuleVisitor),
   statements: List(glance.Statement),
-) -> List(rule.ModuleVisitorOperations) {
+) -> List(rule.ModuleVisitor) {
   use rules, stmt <- list.fold(statements, initial_rules)
   case stmt {
     glance.Use(_, expr) -> do_visit_expressions(rules, expr)

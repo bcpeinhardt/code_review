@@ -1,6 +1,6 @@
+import code_review/rule.{type Rule}
 import glance
 import gleam/string
-import rule.{type Rule, type RuleError}
 
 pub fn rule() -> Rule {
   rule.new("no_trailing_underscore", Nil)
@@ -10,14 +10,14 @@ pub fn rule() -> Rule {
 
 pub fn function_visitor(
   function: glance.Definition(glance.Function),
-) -> List(RuleError) {
+) -> List(rule.Error) {
   let glance.Definition(_, func) = function
   case string.ends_with(func.name, "_") {
     True -> [
       rule.error(
         message: "Trailing underscore in function name",
         details: ["We don't like no trailing underscores."],
-        location: func.name,
+        at: func.name,
       ),
     ]
     False -> []
