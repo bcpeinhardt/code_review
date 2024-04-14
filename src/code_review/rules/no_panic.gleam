@@ -1,5 +1,5 @@
+import code_review/rule.{type Rule}
 import glance
-import rule.{type Rule, type RuleError}
 
 pub fn rule() -> Rule {
   rule.new("no_panic", initial_context)
@@ -25,7 +25,7 @@ fn function_visitor(
 fn expression_visitor(
   expr: glance.Expression,
   context: Context,
-) -> #(List(RuleError), Context) {
+) -> #(List(rule.Error), Context) {
   case expr {
     glance.Panic(_) -> {
       #(
