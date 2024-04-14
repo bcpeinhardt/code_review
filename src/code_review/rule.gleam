@@ -1,6 +1,7 @@
 import glance
 import gleam/list
 import gleam/option
+import gleam/string
 
 pub type RuleSchema(context) {
   RuleSchema(
@@ -51,7 +52,7 @@ pub fn with_function_visitor(
 
 pub fn with_simple_function_visitor(
   schema: RuleSchema(context),
-  visitor: fn(glance.Definition(glance.Function)) -> List(RuleError),
+  visitor: fn(glance.Definition(glance.Function)) -> List(Error),
 ) -> RuleSchema(context) {
   RuleSchema(
     ..schema,
@@ -77,7 +78,7 @@ pub fn with_expression_visitor(
 
 pub fn with_simple_expression_visitor(
   schema: RuleSchema(context),
-  visitor: fn(glance.Expression) -> List(RuleError),
+  visitor: fn(glance.Expression) -> List(Error),
 ) -> RuleSchema(context) {
   RuleSchema(
     ..schema,
@@ -110,16 +111,14 @@ fn combine_visitors(
   }
 }
 
-fn set_rule_name_on_errors(
-  errors: List(RuleError),
-  name: String,
-) -> List(RuleError) {
-  list.map(errors, fn(error) { RuleError(..error, rule: name) })
+fn set_rule_name_on_errors(errors: List(Error), name: String) -> List(Error) {
+  list.map(errors, fn(error) { Error(..error, rule: name) })
 }
 
-// Represents an error reported by a rule.
-pub type RuleError {
-  RuleError(
+/// An error reported by rules.
+///
+pub type Error {
+  Error(
     path: String,
     location_identifier: String,
     rule: String,
@@ -132,8 +131,8 @@ pub fn error(
   message message: String,
   details details: List(String),
   location location: String,
-) -> RuleError {
-  RuleError(
+) -> Error {
+  Error(
     path: "",
     location_identifier: location,
     rule: "",
@@ -143,7 +142,7 @@ pub fn error(
 }
 
 type ErrorsAndContext(context) =
-  #(List(RuleError), context)
+  #(List(Error), context)
 
 pub type ModuleVisitorOperations {
   ModuleVisitorOperations(
@@ -153,7 +152,7 @@ pub type ModuleVisitorOperations {
     function_visitor: option.Option(
       fn(glance.Definition(glance.Function)) -> ModuleVisitorOperations,
     ),
-    get_errors: fn() -> List(RuleError),
+    get_errors: fn() -> List(Error),
   )
 }
 
@@ -213,4 +212,28 @@ fn accumulate(
     list.append(set_rule_name_on_errors(new_errors, rule_name), previous_errors),
     new_context,
   )
+}
+
+// PRETTY PRINTING -------------------------------------------------------------
+
+/// TODO: Just an initial repr for testing, someone good at making things pretty
+///       will need to update this.
+///
+pub fn pretty_print_error(error: Error) -> String {
+  let Error(
+    path: path,
+    location_identifier: location_identifier,
+    rule: rule,
+    message: message,
+    details: details,
+  ) = error
+
+  [
+    "Path: " <> path <> "\n",
+    "Location Identifier: " <> location_identifier,
+    "Rule: " <> rule,
+    "Error: " <> message,
+    "Details: " <> string.join(details, with: "\n"),
+  ]
+  |> string.join(with: "\n")
 }

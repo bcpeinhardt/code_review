@@ -1,8 +1,8 @@
-import rule.{type Rule}
-import rules/no_deprecated
-import rules/no_panic
-import rules/no_trailing_underscore
-import rules/no_unnecessary_string_concatenation
+import code_review/rule.{type Rule}
+import code_review/rules/no_deprecated
+import code_review/rules/no_panic
+import code_review/rules/no_trailing_underscore
+import code_review/rules/no_unnecessary_string_concatenation
 
 pub fn config() -> List(Rule) {
   [
