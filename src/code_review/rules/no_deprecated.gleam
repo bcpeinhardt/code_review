@@ -51,7 +51,7 @@ fn expression_visitor(
             rule.error(
               message: "Found usage of deprecated function",
               details: ["Don't use this anymore."],
-              location: context.current_location,
+              at: context.current_location,
             ),
           ],
           context,

@@ -27,21 +27,20 @@ fn expression_visitor(
   context: Context,
 ) -> #(List(rule.Error), Context) {
   case expr {
-    glance.Panic(_) -> {
-      #(
-        [
-          rule.error(
-            message: "Found `panic`",
-            details: [
-              "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
-              "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
-            ],
-            location: context.current_location,
-          ),
-        ],
-        context,
-      )
-    }
+    glance.Panic(_) -> #(
+      [
+        rule.error(
+          at: context.current_location,
+          message: "Found `panic`",
+          details: [
+            "This keyword should almost never be used! It may be useful in initial prototypes and scripts, but its use in a library or production application is a sign that the design could be improved.",
+            "With well designed types the type system can typically be used to make these invalid states unrepresentable.",
+          ],
+        ),
+      ],
+      context,
+    )
+
     _ -> #([], context)
   }
 }

@@ -17,7 +17,7 @@ pub fn function_visitor(
       rule.error(
         message: "Trailing underscore in function name",
         details: ["We don't like no trailing underscores."],
-        location: func.name,
+        at: func.name,
       ),
     ]
     False -> []
