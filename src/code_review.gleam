@@ -4,13 +4,16 @@
 //// pointing out the issue.
 
 import code_review/internal/project.{type Project}
-import code_review/rule
+import code_review/rule.{type Rule}
+import code_review/rules/no_deprecated
+import code_review/rules/no_panic
+import code_review/rules/no_trailing_underscore
+import code_review/rules/no_unnecessary_string_concatenation
 import glance
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
-import review_config
 
 // RUNNING THE LINTER ----------------------------------------------------------
 
@@ -32,23 +35,25 @@ pub fn main() -> Nil {
 ///
 fn run(on project_root: String) -> Result(List(rule.Error), project.Error) {
   use knowledge_base <- result.try(project.read(project_root))
-  let rule_visitors =
-    list.map(review_config.config(), fn(rule) { rule.module_visitor() })
-  let errors = visit(knowledge_base, rule_visitors)
-  Ok(errors)
+  let rules = [
+    no_panic.rule(),
+    no_unnecessary_string_concatenation.rule(),
+    no_trailing_underscore.rule(),
+    no_deprecated.rule(),
+  ]
+
+  Ok(visit(knowledge_base, rules))
 }
 
 /// TODO: once Gleam goes v1.1 this could be marked as internal, I don't think
 ///       we should expose it in the public API.
 ///       I feel the `code_review` module should only publicly expose the `main`
 ///       function that acts as the CLI entry point.
-pub fn visit(
-  project: Project,
-  rules: List(rule.ModuleVisitorOperations),
-) -> List(rule.Error) {
-  use acc, project.Module(path, module) <- list.fold(project.src_modules, [])
+pub fn visit(project: Project, rules: List(Rule)) -> List(rule.Error) {
+  let rule_visitors = list.map(rules, fn(rule) { rule.module_visitor() })
 
-  visit_module(module, rules)
+  use acc, project.Module(path, module) <- list.fold(project.src_modules, [])
+  visit_module(module, rule_visitors)
   |> list.flat_map(fn(rule) { rule.get_errors() })
   |> list.map(fn(error) { rule.Error(..error, path: path) })
   |> list.append(acc)

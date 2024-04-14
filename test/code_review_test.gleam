@@ -2,12 +2,15 @@ import birdie
 import code_review
 import code_review/internal/project
 import code_review/rule
+import code_review/rules/no_deprecated
+import code_review/rules/no_panic
+import code_review/rules/no_trailing_underscore
+import code_review/rules/no_unnecessary_string_concatenation
 import glance
 import gleam/dict
 import gleam/list
 import gleam/string
 import gleeunit
-import review_config
 
 pub fn main() {
   gleeunit.main()
@@ -19,11 +22,15 @@ fn test_example_source_no_gleam_toml(example_code src: String) -> String {
     project.Project(config: dict.new(), src_modules: [
       project.Module(name: "mocked", src: module),
     ])
-  let rule_visitors =
-    list.map(review_config.config(), fn(rule) { rule.module_visitor() })
-  let errors = code_review.visit(project, rule_visitors)
 
-  errors
+  let rules = [
+    no_panic.rule(),
+    no_unnecessary_string_concatenation.rule(),
+    no_trailing_underscore.rule(),
+    no_deprecated.rule(),
+  ]
+
+  code_review.visit(project, rules)
   |> list.map(rule.pretty_print_error)
   |> string.join(with: "\n\n\n")
 }
