@@ -3,7 +3,23 @@ import gleam/list
 import gleam/option
 import gleam/string
 
-pub type RuleSchema(context) {
+// TYPES -----------------------------------------------------------------------
+
+pub opaque type Rule {
+  Rule(name: String, module_visitor: fn() -> ModuleVisitor)
+}
+
+pub type ModuleVisitor {
+  ModuleVisitor(
+    expression_visitor: option.Option(fn(glance.Expression) -> ModuleVisitor),
+    function_visitor: option.Option(
+      fn(glance.Definition(glance.Function)) -> ModuleVisitor,
+    ),
+    get_errors: fn() -> List(Error),
+  )
+}
+
+pub opaque type RuleSchema(context) {
   RuleSchema(
     name: String,
     initial_context: context,
@@ -17,14 +33,27 @@ pub type RuleSchema(context) {
   )
 }
 
+/// An error reported by rules.
+///
+pub opaque type Error {
+  Error(
+    path: String,
+    location_identifier: String,
+    rule: String,
+    message: String,
+    details: List(String),
+  )
+}
+
+type ErrorsAndContext(context) =
+  #(List(Error), context)
+
+// BUILDING RULES --------------------------------------------------------------
+
 pub fn to_rule(schema: RuleSchema(context)) -> Rule {
   Rule(name: schema.name, module_visitor: fn() {
     rule_to_operations(schema, #([], schema.initial_context))
   })
-}
-
-pub type Rule {
-  Rule(name: String, module_visitor: fn() -> ModuleVisitorOperations)
 }
 
 pub fn new(name: String, initial_context: context) -> RuleSchema(context) {
@@ -41,72 +70,49 @@ pub fn with_function_visitor(
   visitor: fn(glance.Definition(glance.Function), context) ->
     ErrorsAndContext(context),
 ) -> RuleSchema(context) {
-  RuleSchema(
-    ..schema,
-    function_visitor: option.Some(combine_visitors(
-      visitor,
-      schema.function_visitor,
-    )),
-  )
+  let new_visitor = combine_visitors(visitor, schema.function_visitor)
+  RuleSchema(..schema, function_visitor: option.Some(new_visitor))
 }
 
 pub fn with_simple_function_visitor(
   schema: RuleSchema(context),
   visitor: fn(glance.Definition(glance.Function)) -> List(Error),
 ) -> RuleSchema(context) {
-  RuleSchema(
-    ..schema,
-    function_visitor: option.Some(combine_visitors(
-      fn(node, context) { #(visitor(node), context) },
-      schema.function_visitor,
-    )),
-  )
+  let simple_visitor = fn(fn_, context) { #(visitor(fn_), context) }
+  with_function_visitor(schema, simple_visitor)
 }
 
 pub fn with_expression_visitor(
   schema: RuleSchema(context),
   visitor: fn(glance.Expression, context) -> ErrorsAndContext(context),
 ) -> RuleSchema(context) {
-  RuleSchema(
-    ..schema,
-    expression_visitor: option.Some(combine_visitors(
-      visitor,
-      schema.expression_visitor,
-    )),
-  )
+  let new_visitor = combine_visitors(visitor, schema.expression_visitor)
+  RuleSchema(..schema, expression_visitor: option.Some(new_visitor))
 }
 
 pub fn with_simple_expression_visitor(
   schema: RuleSchema(context),
   visitor: fn(glance.Expression) -> List(Error),
 ) -> RuleSchema(context) {
-  RuleSchema(
-    ..schema,
-    expression_visitor: option.Some(combine_visitors(
-      fn(node, context) { #(visitor(node), context) },
-      schema.expression_visitor,
-    )),
-  )
+  let simple_visitor = fn(expr, context) { #(visitor(expr), context) }
+  with_expression_visitor(schema, simple_visitor)
 }
 
 fn combine_visitors(
   new_visitor: fn(a, context) -> ErrorsAndContext(context),
-  maybe_previous_visitor: option.Option(
-    fn(a, context) -> ErrorsAndContext(context),
-  ),
-) {
-  case maybe_previous_visitor {
+  previous_visitor: option.Option(fn(a, context) -> ErrorsAndContext(context)),
+) -> fn(a, context) -> ErrorsAndContext(context) {
+  case previous_visitor {
     option.None -> new_visitor
-    option.Some(previous_visitor) -> fn(a: a, context: context) {
+    option.Some(previous_visitor) -> fn(a, context) {
       let #(errors_after_first_visit, context_after_first_visit) =
         previous_visitor(a, context)
       let #(errors_after_second_visit, context_after_second_visit) =
         new_visitor(a, context_after_first_visit)
+      let all_errors =
+        list.append(errors_after_first_visit, errors_after_second_visit)
 
-      #(
-        list.append(errors_after_first_visit, errors_after_second_visit),
-        context_after_second_visit,
-      )
+      #(all_errors, context_after_second_visit)
     }
   }
 }
@@ -115,58 +121,17 @@ fn set_rule_name_on_errors(errors: List(Error), name: String) -> List(Error) {
   list.map(errors, fn(error) { Error(..error, rule: name) })
 }
 
-/// An error reported by rules.
-///
-pub type Error {
-  Error(
-    path: String,
-    location_identifier: String,
-    rule: String,
-    message: String,
-    details: List(String),
-  )
-}
-
-pub fn error(
-  message message: String,
-  details details: List(String),
-  location location: String,
-) -> Error {
-  Error(
-    path: "",
-    location_identifier: location,
-    rule: "",
-    message: message,
-    details: details,
-  )
-}
-
-type ErrorsAndContext(context) =
-  #(List(Error), context)
-
-pub type ModuleVisitorOperations {
-  ModuleVisitorOperations(
-    expression_visitor: option.Option(
-      fn(glance.Expression) -> ModuleVisitorOperations,
-    ),
-    function_visitor: option.Option(
-      fn(glance.Definition(glance.Function)) -> ModuleVisitorOperations,
-    ),
-    get_errors: fn() -> List(Error),
-  )
-}
-
 fn rule_to_operations(
   schema: RuleSchema(context),
   errors_and_context: ErrorsAndContext(context),
-) -> ModuleVisitorOperations {
+) -> ModuleVisitor {
   let raise = fn(new_errors_and_context: ErrorsAndContext(context)) {
     // Instead of being recursive, this could simply mutate `errors_and_context`
-    // and return the originally created `ModuleVisitorOperations` below.
+    // and return the originally created `ModuleVisitor` below.
     rule_to_operations(schema, new_errors_and_context)
   }
 
-  ModuleVisitorOperations(
+  ModuleVisitor(
     expression_visitor: create_visitor(
       schema.name,
       raise,
@@ -199,7 +164,9 @@ fn create_visitor(
   }
 }
 
-/// Concatenate the errors of the previous step and of the last step, and take the last step's context.
+/// Concatenate the errors of the previous step and of the last step, and take
+/// the last step's context.
+///
 fn accumulate(
   rule_name: String,
   visitor: fn(context) -> ErrorsAndContext(context),
@@ -214,7 +181,33 @@ fn accumulate(
   )
 }
 
-// PRETTY PRINTING -------------------------------------------------------------
+// GETTING A VISITORS OUT OF RULES ---------------------------------------------
+
+pub fn module_visitor(from rule: Rule) -> ModuleVisitor {
+  rule.module_visitor()
+}
+
+// RULE ERRORS -----------------------------------------------------------------
+
+pub fn error(
+  message message: String,
+  details details: List(String),
+  at location: String,
+) -> Error {
+  Error(
+    path: "",
+    location_identifier: location,
+    rule: "",
+    message: message,
+    details: details,
+  )
+}
+
+/// TODO: this could be internal as well.
+///
+pub fn set_error_path(error: Error, path: String) -> Error {
+  Error(..error, path: path)
+}
 
 /// TODO: Just an initial repr for testing, someone good at making things pretty
 ///       will need to update this.

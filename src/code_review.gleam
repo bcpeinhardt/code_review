@@ -50,19 +50,19 @@ fn run(on project_root: String) -> Result(List(rule.Error), project.Error) {
 ///       I feel the `code_review` module should only publicly expose the `main`
 ///       function that acts as the CLI entry point.
 pub fn visit(project: Project, rules: List(Rule)) -> List(rule.Error) {
-  let rule_visitors = list.map(rules, fn(rule) { rule.module_visitor() })
+  let rule_visitors = list.map(rules, rule.module_visitor)
 
   use acc, project.Module(path, module) <- list.fold(project.src_modules, [])
   visit_module(module, rule_visitors)
   |> list.flat_map(fn(rule) { rule.get_errors() })
-  |> list.map(fn(error) { rule.Error(..error, path: path) })
+  |> list.map(rule.set_error_path(_, path))
   |> list.append(acc)
 }
 
 fn visit_module(
   module: glance.Module,
-  rules: List(rule.ModuleVisitorOperations),
-) -> List(rule.ModuleVisitorOperations) {
+  rules: List(rule.ModuleVisitor),
+) -> List(rule.ModuleVisitor) {
   let glance.Module(constants: constants, functions: functions, ..) = module
 
   rules
@@ -71,26 +71,26 @@ fn visit_module(
 }
 
 fn visit_constants(
-  rules: List(rule.ModuleVisitorOperations),
+  rules: List(rule.ModuleVisitor),
   constants: List(glance.Definition(glance.Constant)),
-) -> List(rule.ModuleVisitorOperations) {
+) -> List(rule.ModuleVisitor) {
   use rules_acc, constant_with_definition <- list.fold(constants, rules)
   let glance.Definition(_, c) = constant_with_definition
   do_visit_expressions(rules_acc, c.value)
 }
 
 fn visit_functions(
-  rules: List(rule.ModuleVisitorOperations),
+  rules: List(rule.ModuleVisitor),
   functions: List(glance.Definition(glance.Function)),
-) -> List(rule.ModuleVisitorOperations) {
+) -> List(rule.ModuleVisitor) {
   list.fold(functions, rules, visit_function)
 }
 
 fn visit_function(
-  rules_before_visit: List(rule.ModuleVisitorOperations),
+  rules_before_visit: List(rule.ModuleVisitor),
   function: glance.Definition(glance.Function),
-) -> List(rule.ModuleVisitorOperations) {
-  let rules_after_function_visit: List(rule.ModuleVisitorOperations) =
+) -> List(rule.ModuleVisitor) {
+  let rules_after_function_visit: List(rule.ModuleVisitor) =
     apply_visitor(function, rules_before_visit, fn(rule) {
       rule.function_visitor
     })
@@ -100,9 +100,9 @@ fn visit_function(
 }
 
 fn visit_statement(
-  rules: List(rule.ModuleVisitorOperations),
+  rules: List(rule.ModuleVisitor),
   statement: glance.Statement,
-) -> List(rule.ModuleVisitorOperations) {
+) -> List(rule.ModuleVisitor) {
   case statement {
     glance.Use(_, expr) -> do_visit_expressions(rules, expr)
     glance.Assignment(value: val, ..) -> do_visit_expressions(rules, val)
@@ -112,10 +112,10 @@ fn visit_statement(
 
 fn apply_visitor(
   a: a,
-  rules: List(rule.ModuleVisitorOperations),
-  get_visitor: fn(rule.ModuleVisitorOperations) ->
-    option.Option(fn(a) -> rule.ModuleVisitorOperations),
-) -> List(rule.ModuleVisitorOperations) {
+  rules: List(rule.ModuleVisitor),
+  get_visitor: fn(rule.ModuleVisitor) ->
+    option.Option(fn(a) -> rule.ModuleVisitor),
+) -> List(rule.ModuleVisitor) {
   use rule <- list.map(rules)
   case get_visitor(rule) {
     option.None -> rule
@@ -124,10 +124,10 @@ fn apply_visitor(
 }
 
 fn do_visit_expressions(
-  rules_before_visit: List(rule.ModuleVisitorOperations),
+  rules_before_visit: List(rule.ModuleVisitor),
   input: glance.Expression,
-) -> List(rule.ModuleVisitorOperations) {
-  let rules: List(rule.ModuleVisitorOperations) =
+) -> List(rule.ModuleVisitor) {
+  let rules: List(rule.ModuleVisitor) =
     apply_visitor(input, rules_before_visit, fn(rule) {
       rule.expression_visitor
     })
@@ -218,9 +218,9 @@ fn do_visit_expressions(
 }
 
 fn visit_statements(
-  initial_rules: List(rule.ModuleVisitorOperations),
+  initial_rules: List(rule.ModuleVisitor),
   statements: List(glance.Statement),
-) -> List(rule.ModuleVisitorOperations) {
+) -> List(rule.ModuleVisitor) {
   use rules, stmt <- list.fold(statements, initial_rules)
   case stmt {
     glance.Use(_, expr) -> do_visit_expressions(rules, expr)
