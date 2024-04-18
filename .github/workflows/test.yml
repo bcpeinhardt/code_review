@@ -1,7 +1,7 @@
 name: test
 
 env:
-  GLEAM_VERSION: "1.1.0-rc3"
+  GLEAM_VERSION: "1.1.0"
 
 on:
   push:

@@ -24,7 +24,7 @@ packages = [
 ]
 
 [requirements]
-birdie = { version = ">= 1.1.2 and < 2.0.0"}
+birdie = { version = ">= 1.1.2 and < 2.0.0" }
 filepath = { version = ">= 1.0.0 and < 2.0.0" }
 glance = { version = ">= 0.8.2 and < 1.0.0" }
 glance_printer = { version = ">= 1.1.0 and < 2.0.0" }
