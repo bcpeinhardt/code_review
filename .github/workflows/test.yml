@@ -51,7 +51,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        erlang: ["26", "25", "27.0-rc1"]
+        erlang: ["26", "25", "27.0-rc3"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache/restore@v4
