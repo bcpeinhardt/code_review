@@ -43,10 +43,10 @@ fn expression_visitor(
     )
 
     glance.BinaryOperator(
-      glance.Concatenate,
-      glance.String(_),
-      glance.String(_),
-    ) -> #(
+        glance.Concatenate,
+        glance.String(_),
+        glance.String(_),
+      ) -> #(
       [
         rule.error(
           at: context.current_location,
