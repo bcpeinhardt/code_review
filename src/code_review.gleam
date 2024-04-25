@@ -13,8 +13,13 @@ import gleam/result
 
 // RUNNING THE LINTER ----------------------------------------------------------
 
-pub fn main(rules: List(Rule)) -> Nil {
-  case run(on: project.root(), with_rules: rules) {
+pub fn run(rules: List(Rule)) -> Nil {
+  let run_result = {
+    use knowledge_base <- result.try(project.read(project.root()))
+    Ok(visit(knowledge_base, rules))
+  }
+
+  case run_result {
     Ok(rule_errors) ->
       list.each(rule_errors, fn(rule_error) {
         rule.pretty_print_error(rule_error)
@@ -25,16 +30,6 @@ pub fn main(rules: List(Rule)) -> Nil {
       project.explain_error(project_error)
       |> io.println_error
   }
-}
-
-/// Run the linter for a project at the given path.
-///
-fn run(
-  on project_root: String,
-  with_rules rules: List(Rule),
-) -> Result(List(rule.Error), project.Error) {
-  use knowledge_base <- result.try(project.read(project_root))
-  Ok(visit(knowledge_base, rules))
 }
 
 /// TODO: once Gleam goes v1.1 this could be marked as internal, I don't think

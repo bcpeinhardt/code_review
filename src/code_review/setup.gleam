@@ -17,7 +17,7 @@ pub fn main() {
     no_trailing_underscore.rule(),
     no_deprecated.rule(),
   ]
-  code_review.main(rules)
+  code_review.run(rules)
 }
 "
 
