@@ -5,10 +5,6 @@
 
 import code_review/internal/project.{type Project}
 import code_review/rule.{type Rule}
-import code_review/rules/no_deprecated
-import code_review/rules/no_panic
-import code_review/rules/no_trailing_underscore
-import code_review/rules/no_unnecessary_string_concatenation
 import glance
 import gleam/io
 import gleam/list
@@ -17,8 +13,13 @@ import gleam/result
 
 // RUNNING THE LINTER ----------------------------------------------------------
 
-pub fn main() -> Nil {
-  case run(on: project.root()) {
+pub fn run(rules: List(Rule)) -> Nil {
+  let run_result = {
+    use knowledge_base <- result.try(project.read(project.root()))
+    Ok(visit(knowledge_base, rules))
+  }
+
+  case run_result {
     Ok(rule_errors) ->
       list.each(rule_errors, fn(rule_error) {
         rule.pretty_print_error(rule_error)
@@ -29,20 +30,6 @@ pub fn main() -> Nil {
       project.explain_error(project_error)
       |> io.println_error
   }
-}
-
-/// Run the linter for a project at the given path.
-///
-fn run(on project_root: String) -> Result(List(rule.Error), project.Error) {
-  use knowledge_base <- result.try(project.read(project_root))
-  let rules = [
-    no_panic.rule(),
-    no_unnecessary_string_concatenation.rule(),
-    no_trailing_underscore.rule(),
-    no_deprecated.rule(),
-  ]
-
-  Ok(visit(knowledge_base, rules))
 }
 
 /// TODO: once Gleam goes v1.1 this could be marked as internal, I don't think
