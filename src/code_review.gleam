@@ -5,10 +5,6 @@
 
 import code_review/internal/project.{type Project}
 import code_review/rule.{type Rule}
-import code_review/rules/no_deprecated
-import code_review/rules/no_panic
-import code_review/rules/no_trailing_underscore
-import code_review/rules/no_unnecessary_string_concatenation
 import glance
 import gleam/io
 import gleam/list
