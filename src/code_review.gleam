@@ -152,11 +152,11 @@ fn do_visit_expressions(
       visit_statements(rules, statements)
     }
     glance.RecordUpdate(
-        module: _,
-        constructor: _,
-        record: record,
-        fields: fields,
-      ) -> {
+      module: _,
+      constructor: _,
+      record: record,
+      fields: fields,
+    ) -> {
       let new_rules = do_visit_expressions(rules, record)
 
       use acc_rules, #(_, expr) <- list.fold(fields, new_rules)
@@ -174,11 +174,11 @@ fn do_visit_expressions(
       do_visit_expressions(rules, expr)
     }
     glance.FnCapture(
-        label: _,
-        function: function,
-        arguments_before: arguments_before,
-        arguments_after: arguments_after,
-      ) -> {
+      label: _,
+      function: function,
+      arguments_before: arguments_before,
+      arguments_after: arguments_after,
+    ) -> {
       list.fold(
         list.append(arguments_before, arguments_after),
         rules,
